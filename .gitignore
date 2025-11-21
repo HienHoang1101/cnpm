@@ -1,0 +1,86 @@
+### General ###
+.DS_Store
+*.swp
+*.swo
+*~
+~$*
+
+### Node ###
+# Dependencies
+**/node_modules/
+**/package-lock.json
+**/yarn.lock
+**/npm-debug.log*
+**/yarn-debug.log*
+**/yarn-error.log*
+
+# Environment
+**/.env
+**/.env.*
+!.env.example
+.env.local
+
+### Build artifacts ###
+**/dist/
+**/build/
+**/coverage/
+**/.nyc_output/
+
+### Logs ###
+**/*.log
+**/logs/
+**/debug/
+
+### Editors ###
+.idea/
+.vscode/
+*.sublime-*
+.project
+.classpath
+.c9/
+
+### Docker ###
+docker-compose.override.yml
+**/docker-compose.*.yml
+
+### Database ###
+**/data/
+**/mongodb/
+**/*.sqlite
+**/*.sqlite3
+
+### Testing ###
+**/junit.xml
+**/test-results/
+**/.jest-cache/
+
+### Misc ###
+**/tmp/
+**/temp/
+**/.qodo
+**/.cache
+**/.pnp*
+**/.yarn-integrity
+**/.next/
+**/.serverless/
+**/.fusebox/
+**/.dynamodb/
+**/.elasticbeanstalk/
+**/.terraform/
+
+### Kubernetes ###
+**/*.kubeconfig
+**/k8s/secret*.yaml
+
+### CI ###
+.circleci/
+.travis.yml
+.gitlab-ci.yml
+.github/
+
+**/node_modules
+**/.env
+**/.git
+*.log
+dist/
+build/

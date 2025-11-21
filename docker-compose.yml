@@ -1,0 +1,103 @@
+version: "3.8"
+
+services:
+  # Auth Service
+  auth-service:
+    build:
+      context: ./auth
+      dockerfile: Dockerfile
+    container_name: auth-service
+    ports:
+      - "${A_PORT}:5001"
+    environment:
+      - PORT=${A_PORT}
+      - NODE_ENV=${NODE_ENV}
+      - MONGO_URI=${MONGO_URI_Auth}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
+      - JWT_EXPIRE=${JWT_EXPIRE}
+      - JWT_REFRESH_EXPIRE=${JWT_REFRESH_EXPIRE}
+      - CORS_ORIGIN=${CORS_ORIGIN}
+      - AUTO_SEED_ADMIN=${AUTO_SEED_ADMIN}
+      - ADMIN_EMAIL=${ADMIN_EMAIL}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - ADMIN_NAME=${ADMIN_NAME}
+      - ADMIN_PHONE=${ADMIN_PHONE}
+    restart: unless-stopped
+
+  admin-service:
+    build:
+      context: ./admin-service
+      dockerfile: Dockerfile
+    container_name: admin-service
+    ports:
+      - "${PORT_Admin}:5008"
+    environment:
+      - PORT=${PORT_Admin}
+      - MONGO_URI=${MONGO_URI_Admin}
+      - AUTH_SERVICE_URL=${AUTH_SERVICE_URL}
+      - RESTAURANT_SERVICE_URL=${RESTAURANT_SERVICE_URL}
+      - ORDER_SERVICE_URL=${ORDER_SERVICE_URL}
+    restart: unless-stopped
+
+  # Order Service
+  order-service:
+    build:
+      context: ./order
+      dockerfile: Dockerfile
+    container_name: order-service
+    ports:
+      - "${PORT}:5002"
+    environment:
+      - PORT=${PORT}
+      - NODE_ENV=${NODE_ENV}
+      - MONGODB_URI=${MONGODB_URI_Order}
+      - JWT_SECRET=${JWT_SECRET}
+      - AUTH_SERVICE_URL=${AUTH_SERVICE_URL}
+      - ADMIN_SERVICE_URL=${ADMIN_SERVICE_URL}
+      - RESTAURANT_SERVICE_URL=${RESTAURANT_SERVICE_URL}
+      - CORS_ORIGIN=${CORS_ORIGIN}
+    restart: unless-stopped
+
+  delivery-service:
+    build:
+      context: ./food-delivery-server
+      dockerfile: Dockerfile
+    container_name: delivery-service
+    ports:
+      - "${PORT_Delivery}:5004"
+    environment:
+      - PORT=${PORT_Delivery}
+      - DELIVERY_MONGO_URI=${MONGO_URI_Delivery}
+      - AUTH_SERVICE_URL=${AUTH_SERVICE_URL}
+      - ORDER_SERVICE_URL=${ORDER_SERVICE_URL}
+      - RESTAURANT_SERVICE_URL=${RESTAURANT_SERVICE_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
+      - CORS_ORIGIN=${CORS_ORIGIN}
+      - WEBSOCKET_ENABLED=${WEBSOCKET_ENABLED}
+      - GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY}
+      - EXPO_PUBLIC_API_URL=${EXPO_PUBLIC_API_URL}
+      - EXPO_PUBLIC_DELIVERY_API_URL=${EXPO_PUBLIC_DELIVERY_API_URL}
+    restart: unless-stopped
+
+  payment-service:
+    build:
+      context: ./payment-service
+      dockerfile: Dockerfile
+    container_name: payment-service
+    ports:
+      - "${PORT_Payment}:5005"
+    environment:
+      - MONGO_URI=${MONGO_URI_Payment}
+      - PAYHERE_MERCHANT_ID=${PAYHERE_MERCHANT_ID}
+      - PAYHERE_SECRET=${PAYHERE_SECRET}
+      - PAYHERE_BASE_URL=${PAYHERE_BASE_URL}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - PORT=${PORT_Payment}
+      - AUTH_SERVICE_URL=${AUTH_SERVICE_URL}
+      - RESTAURANT_SERVICE_URL=${RESTAURANT_SERVICE_URL}
+      - ORDER_SERVICE_URL=${ORDER_SERVICE_URL}
+      - CORS_ORIGIN=${CORS_ORIGIN}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+    restart: unless-stopped
