@@ -9,9 +9,6 @@ on:
 jobs:
   order-tests:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: order
 
     steps:
       - name: Checkout repository
@@ -21,11 +18,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-          cache-dependency-path: order/package-lock.json
+          cache: "npm"
+          cache-dependency-path: "order/package-lock.json"
 
       - name: Install dependencies (order service)
-        run: npm ci
+        working-directory: ./order
+        run: npm install
 
       - name: Run tests (order service)
+        working-directory: ./order
         run: npm test
