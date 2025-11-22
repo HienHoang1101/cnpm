@@ -1,0 +1,83 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'food-delivery'
+    environment: 'development'
+
+# Alertmanager configuration (to be configured later)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          # - alertmanager:9093
+
+# Rule files (to be added later for alerting rules)
+rule_files:
+  # - "alerts/*.yml"
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # cAdvisor metrics for container monitoring
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+
+  # Auth Service
+  - job_name: 'auth-service'
+    static_configs:
+      - targets: ['auth:4000']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+
+  # Order Service
+  - job_name: 'order-service'
+    static_configs:
+      - targets: ['order:4001']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+
+  # Payment Service
+  - job_name: 'payment-service'
+    static_configs:
+      - targets: ['payment-service:4002']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+
+  # Notification Service
+  - job_name: 'notification-service'
+    static_configs:
+      - targets: ['notification-service:4003']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+
+  # Food Delivery Server
+  - job_name: 'food-delivery-server'
+    static_configs:
+      - targets: ['food-delivery-server:4004']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+
+  # Restaurant Service
+  - job_name: 'restaurant-service'
+    static_configs:
+      - targets: ['restaurant:4005']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+
+  # Admin Service
+  - job_name: 'admin-service'
+    static_configs:
+      - targets: ['admin-service:4006']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+
+  # Example: Node Exporter (if deployed)
+  # - job_name: 'node-exporter'
+  #   static_configs:
+  #     - targets: ['node-exporter:9100']
