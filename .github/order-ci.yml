@@ -1,0 +1,29 @@
+name: Order Service CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  order-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Install dependencies (order service)
+        working-directory: ./order
+        run: npm install
+
+      - name: Run tests (order service)
+        working-directory: ./order
+        run: npm test
