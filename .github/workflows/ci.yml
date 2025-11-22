@@ -39,22 +39,21 @@ jobs:
       
       - name: Install dependencies
         working-directory: ${{ matrix.service }}
+        # Using --legacy-peer-deps to handle potential peer dependency conflicts in the monorepo
+        # Fallback to npm install if package-lock.json doesn't exist
         run: npm ci --legacy-peer-deps || npm install --legacy-peer-deps
       
       - name: Run linter
         working-directory: ${{ matrix.service }}
         run: npm run lint --if-present
-        continue-on-error: true
       
       - name: Run unit tests
         working-directory: ${{ matrix.service }}
         run: npm test --if-present
-        continue-on-error: true
       
       - name: Run integration tests
         working-directory: ${{ matrix.service }}
         run: npm run test:integration --if-present
-        continue-on-error: true
       
       - name: Build application
         working-directory: ${{ matrix.service }}

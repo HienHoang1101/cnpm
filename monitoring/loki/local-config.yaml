@@ -35,7 +35,7 @@ schema_config:
         period: 24h
 
 ruler:
-  alertmanager_url: http://localhost:9093
+  alertmanager_url: http://alertmanager:9093
 
 # Retention and limits (keep logs for 7 days, suitable for development)
 limits_config:
