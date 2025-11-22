@@ -43,10 +43,13 @@ app.use('/api/earnings', protect, earningsRoutes);
 app.use('/api/live-drivers', liveDriverRoutes);
 
 // Health check
-app.get('/health', async (_req, res) => {
-  const health = await checkHealth();
-  res.status(200).json(health);
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'delivery-service'
+  });
 });
+
 
 // Error handling middleware
 app.use((err, req, res, next) => {
