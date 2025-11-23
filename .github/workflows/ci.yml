@@ -104,24 +104,45 @@ jobs:
             exit 0
           fi
           mkdir -p test-reports
+          any_fail=0
           for svc in $(echo "$SERVICES_JSON" | jq -r '.[]'); do
-            # Only run tests if package.json exists and has a test script
-            if [ -f "$svc/package.json" ]; then
-              echo "Checking $svc for tests"
-              if grep -q '"test"' "$svc/package.json"; then
-                echo "Running tests for $svc"
-                pushd $svc
-                npm ci --silent
-                # Run tests and output JSON to reports for upload
-                npm test -- --json --outputFile=../test-reports/${svc//\//-}-jest.json || true
-                popd
-              else
-                echo "No test script in $svc/package.json; skipping"
-              fi
-            else
+            safe_svc=${svc//\//-}
+            # Only run tests if package.json exists
+            if [ ! -f "$svc/package.json" ]; then
               echo "No package.json in $svc; skipping"
+              continue
             fi
+            echo "Checking $svc for tests"
+            if ! grep -q '"test"' "$svc/package.json"; then
+              echo "No test script in $svc/package.json; skipping"
+              continue
+            fi
+
+            echo "Running tests for $svc"
+            pushd $svc
+            # Install deps: prefer npm ci when lockfile exists
+            if [ -f package-lock.json ]; then
+              npm ci --silent || { echo "npm ci failed for $svc"; any_fail=1; popd; continue; }
+            else
+              npm install --silent || { echo "npm install failed for $svc"; any_fail=1; popd; continue; }
+            fi
+
+            # Run tests and capture exit code + report (do not abort loop)
+            npm test -- --json --outputFile=../test-reports/${safe_svc}-jest.json || rc=$?; rc=${rc:-0}
+            if [ "$rc" -ne 0 ]; then
+              echo "Tests failed for $svc with exit code $rc"
+              any_fail=1
+            else
+              echo "Tests passed for $svc"
+            fi
+            unset rc
+            popd
           done
+
+          if [ "$any_fail" -ne 0 ]; then
+            echo "One or more unit test suites failed"
+            exit 1
+          fi
 
       - name: Upload test reports
         if: always()
