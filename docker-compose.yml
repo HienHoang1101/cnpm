@@ -101,6 +101,67 @@ services:
       - CORS_ORIGIN=${CORS_ORIGIN}
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
     restart: unless-stopped
+
+  notification-service:
+    build:
+      context: ./notification-service
+      dockerfile: Dockerfile
+    container_name: notification-service
+    ports:
+      - "5007:5007"
+    environment:
+      - PORT=5007
+      - MONGO_URI=${MONGO_URI_Notifications}
+      - ENABLE_KAFKA=false
+    restart: unless-stopped
+
+  restaurant:
+    build:
+      context: ./restaurant
+      dockerfile: Dockerfile
+    container_name: restaurant
+    ports:
+      - "5006:5006"
+    environment:
+      - PORT=5006
+      - MONGOURL=${MONGO_URI_Restaurant}
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    volumes:
+      - ./monitoring:/etc/prometheus:ro
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+      - alertmanager
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+  alertmanager:
+    image: prom/alertmanager
+    container_name: alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    restart: unless-stopped
+  blackbox-exporter:
+    image: prom/blackbox-exporter:latest
+    container_name: blackbox-exporter
+    ports:
+      - "9115:9115"
+    restart: unless-stopped
   mongo:
     image: mongo:6
     container_name: mongo
@@ -112,3 +173,10 @@ services:
 
 volumes:
   mongo_data:
+  prometheus_data:
+  grafana_data:
+
+# Optionally define a network to make intention explicit (compose will create default network)
+networks:
+  default:
+    name: cnpm_default
