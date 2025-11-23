@@ -1,3 +1,0 @@
-CI trigger file - safe test commit
-Purpose: trigger GitHub Actions run to validate buildx cache + compose smoke-tests
-Date: 2025-11-23

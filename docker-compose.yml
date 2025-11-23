@@ -1,3 +1,4 @@
+---
 services:
   # Auth Service
   auth-service:
