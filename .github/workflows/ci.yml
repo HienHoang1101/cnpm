@@ -8,6 +8,88 @@ on:
 
 jobs:
   validate-workflow-yaml:
+      determine-changed:
+        name: Determine changed services
+        runs-on: ubuntu-latest
+        outputs:
+          services: ${{ steps.set.outputs.services }}
+        steps:
+          - name: Checkout
+            uses: actions/checkout@v4
+
+          - name: Determine changed services
+            id: set
+            run: |
+              git fetch origin main --depth=1 || true
+              CHANGED_FILES=$(git diff --name-only origin/main...HEAD || true)
+              echo "Changed files: $CHANGED_FILES"
+              SERVICES_LIST=()
+              CHECK_DIRS=(auth admin-service order food-delivery-server payment-service notification-service restaurant)
+              for d in "${CHECK_DIRS[@]}"; do
+                if echo "$CHANGED_FILES" | grep -q "^$d/"; then
+                  SERVICES_LIST+=("$d")
+                fi
+              done
+              if [ ${#SERVICES_LIST[@]} -eq 0 ]; then
+                SERVICES_LIST=(auth admin-service order food-delivery-server payment-service notification-service restaurant)
+              fi
+              # produce JSON array
+              IFS=','; printf -v JSON '[%s]' "${SERVICES_LIST[*]/#/\"}"; JSON=${JSON//,/,"}; JSON=${JSON//""/","}
+              # fallback: simpler construction
+              ARR=""
+              for s in "${SERVICES_LIST[@]}"; do
+                if [ -z "$ARR" ]; then ARR="\"$s\""; else ARR="$ARR,\"$s\""; fi
+              done
+              JSON="[$ARR]"
+              echo "services=$JSON" >> $GITHUB_OUTPUT
+
+      build-images:
+        name: Build images
+        runs-on: ubuntu-latest
+        needs: determine-changed
+        steps:
+          - name: Checkout
+            uses: actions/checkout@v4
+
+          - name: Set up QEMU
+            uses: docker/setup-qemu-action@v2
+
+          - name: Set up Docker Buildx
+            uses: docker/setup-buildx-action@v2
+
+          - name: Log in to GitHub Container Registry
+            uses: docker/login-action@v2
+            with:
+              registry: ghcr.io
+              username: ${{ github.actor }}
+              password: ${{ secrets.GITHUB_TOKEN }}
+
+          - name: Install jq
+            run: |
+              sudo apt-get update && sudo apt-get install -y jq
+
+          - name: Build changed service images (loop)
+            env:
+              CACHE_REPO: ghcr.io/${{ github.repository_owner }}/cnpm-build-cache
+              SERVICES_JSON: ${{ needs.determine-changed.outputs.services }}
+            run: |
+              set -e
+              echo "Services JSON: $SERVICES_JSON"
+              for svc in $(echo "$SERVICES_JSON" | jq -r '.[]'); do
+                safe_svc=${svc//\//-}
+                gh_image=ghcr.io/${{ github.repository_owner }}/cnpm-${safe_svc}:sha-${{ github.sha }}
+                echo "Building and pushing $svc -> $gh_image"
+                docker buildx build \
+                  --push \
+                  --tag ${gh_image} \
+                  --cache-from=type=registry,ref=${CACHE_REPO}:cache \
+                  --cache-to=type=registry,ref=${CACHE_REPO}:cache,mode=max \
+                  ./$svc
+                echo "Pulling pushed image and tagging for compose"
+                docker pull ${gh_image}
+                docker tag ${gh_image} ci-${safe_svc}:latest
+              done
+
     name: Validate workflow YAML
     runs-on: ubuntu-latest
     steps:
@@ -42,6 +124,7 @@ PY
 
   service-smoke-tests:
     name: Service smoke tests
+    needs: build-images
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -75,24 +158,8 @@ PY
       - name: Quick metrics endpoint smoke (optional)
         run: |
           echo "Metrics smoke test is available locally; skip in CI by default."
-      - name: Determine changed services
-        id: changed
-        run: |
-          git fetch origin main --depth=1 || true
-          CHANGED_FILES=$(git diff --name-only origin/main...HEAD || true)
-          echo "Changed files:"$CHANGED_FILES
-          SERVICES_LIST=""
-          CHECK_DIRS=(auth admin-service order food-delivery-server payment-service notification-service restaurant)
-          for d in "${CHECK_DIRS[@]}"; do
-            if echo "$CHANGED_FILES" | grep -q "^$d/"; then
-              SERVICES_LIST="$SERVICES_LIST $d"
-            fi
-          done
-          if [ -z "$SERVICES_LIST" ]; then
-            SERVICES_LIST="auth admin-service order food-delivery-server payment-service notification-service restaurant"
-          fi
-          SERVICES_LIST=$(echo $SERVICES_LIST | xargs)
-          echo "services=$SERVICES_LIST" >> $GITHUB_OUTPUT
+      # NOTE: determine-changed and build-images are run in separate jobs; service-smoke-tests
+      # will reference the outputs from the `determine-changed` job (via `needs.determine-changed.outputs.services`).
 
       - name: Cache & install deps for `auth`
         uses: actions/cache@v4
@@ -103,7 +170,7 @@ PY
             ${{ runner.os }}-node-
 
       - name: Install deps for `auth` (if changed)
-        if: contains(steps.changed.outputs.services, 'auth')
+        if: contains(needs.determine-changed.outputs.services, 'auth')
         working-directory: ./auth
         run: |
           npm ci --no-audit --no-fund
@@ -117,7 +184,7 @@ PY
             ${{ runner.os }}-node-
 
       - name: Install deps for `admin-service` (if changed)
-        if: contains(steps.changed.outputs.services, 'admin-service')
+        if: contains(needs.determine-changed.outputs.services, 'admin-service')
         working-directory: ./admin-service
         run: |
           npm ci --no-audit --no-fund
@@ -131,7 +198,7 @@ PY
             ${{ runner.os }}-node-
 
       - name: Install deps for `order` (if changed)
-        if: contains(steps.changed.outputs.services, 'order')
+        if: contains(needs.determine-changed.outputs.services, 'order')
         working-directory: ./order
         run: |
           npm ci --no-audit --no-fund
@@ -145,7 +212,7 @@ PY
             ${{ runner.os }}-node-
 
       - name: Install deps for `food-delivery-server` (if changed)
-        if: contains(steps.changed.outputs.services, 'food-delivery-server')
+        if: contains(needs.determine-changed.outputs.services, 'food-delivery-server')
         working-directory: ./food-delivery-server
         run: |
           npm ci --no-audit --no-fund
@@ -159,7 +226,7 @@ PY
             ${{ runner.os }}-node-
 
       - name: Install deps for `payment-service` (if changed)
-        if: contains(steps.changed.outputs.services, 'payment-service')
+        if: contains(needs.determine-changed.outputs.services, 'payment-service')
         working-directory: ./payment-service
         run: |
           npm ci --no-audit --no-fund
@@ -173,7 +240,7 @@ PY
             ${{ runner.os }}-node-
 
       - name: Install deps for `notification-service` (if changed)
-        if: contains(steps.changed.outputs.services, 'notification-service')
+        if: contains(needs.determine-changed.outputs.services, 'notification-service')
         working-directory: ./notification-service
         run: |
           npm ci --no-audit --no-fund
@@ -187,18 +254,12 @@ PY
             ${{ runner.os }}-node-
 
       - name: Install deps for `restaurant` (if changed)
-        if: contains(steps.changed.outputs.services, 'restaurant')
+        if: contains(needs.determine-changed.outputs.services, 'restaurant')
         working-directory: ./restaurant
         run: |
           npm ci --no-audit --no-fund
 
-      - name: Build changed service images
-        run: |
-          set -e
-          for svc in ${{ steps.changed.outputs.services }}; do
-            echo "Building image for $svc"
-            docker build -t ci-${svc//\//-} ./$svc
-          done
+      # Image builds are handled by the separate `build-images` job (matrix-parallel).
 
       - name: Run minimal test compose
         run: |
