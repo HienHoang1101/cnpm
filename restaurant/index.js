@@ -4,11 +4,32 @@ import BodyParser from "body-parser";
 import mongoose from "mongoose";
 import { MONGOURL, PORT } from "./config.js";
 import dotenv from "dotenv";
-import Owner from "./Routes/ResturantOwnerRoute.js";
+import client from "prom-client";
+import Owner from "./routes/ResturantOwnerRoute.js";
 import Admin from "./routes/branchAdminRoute.js";
 
 const app = express();
 dotenv.config();
+
+/* ==== Metrics (Prometheus) ==== */
+client.collectDefaultMetrics();
+
+const httpRequestDuration = new client.Histogram({
+  name: "http_request_duration_ms",
+  help: "Thời gian xử lý HTTP request",
+  labelNames: ["method", "route", "status_code"],
+  buckets: [50, 100, 200, 500, 1000, 2000],
+});
+
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on("finish", () => {
+    httpRequestDuration
+      .labels(req.method, req.route?.path || req.path, res.statusCode)
+      .observe(Date.now() - start);
+  });
+  next();
+});
 
 app.use(
   cors({
@@ -43,3 +64,13 @@ const startServer = async () => {
   }
 };
 startServer();
+
+// Expose Prometheus metrics
+app.get("/metrics", async (req, res) => {
+  try {
+    res.set("Content-Type", client.register.contentType);
+    res.end(await client.register.metrics());
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+});

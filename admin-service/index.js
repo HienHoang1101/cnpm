@@ -5,11 +5,32 @@ import mongoose from "mongoose";
 import RestaurantSettlement from "./routes/restaurantPaymentRoutes.js";
 import { processWeeklySettlements } from "./controllers/settlementController.js";
 import cron from "node-cron";
+import client from "prom-client";
 
 dotenv.config();
 
 // Initialize Express
 const app = express();
+
+/* ==== Metrics ==== */
+client.collectDefaultMetrics();
+
+const httpRequestDuration = new client.Histogram({
+  name: "http_request_duration_ms",
+  help: "Thời gian xử lý HTTP request",
+  labelNames: ["method", "route", "status_code"],
+  buckets: [50, 100, 200, 500, 1000, 2000],
+});
+
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on("finish", () => {
+    httpRequestDuration
+      .labels(req.method, req.route?.path || req.path, res.statusCode)
+      .observe(Date.now() - start);
+  });
+  next();
+});
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -43,6 +64,21 @@ cron.schedule(
 
 // Routes
 app.use("/api/settlements", RestaurantSettlement);
+
+// Health check
+app.get("/health", (req, res) => {
+  res.json({ status: "ok", service: "admin-service" });
+});
+
+// Metrics endpoint for Prometheus
+app.get("/metrics", async (req, res) => {
+  try {
+    res.set("Content-Type", client.register.contentType);
+    res.end(await client.register.metrics());
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+});
 
 // Database Connection
 mongoose

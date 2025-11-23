@@ -7,6 +7,39 @@ on:
     branches: [ main ]
 
 jobs:
+  validate-workflow-yaml:
+    name: Validate workflow YAML
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install PyYAML
+        run: |
+          python -m pip install --user pyyaml
+
+      - name: Validate workflows
+        run: |
+          python - <<'PY'
+import yaml,sys,glob
+ok=True
+for p in glob.glob('.github/workflows/*.yml'):
+    try:
+        yaml.safe_load(open(p))
+        print(p, 'OK')
+    except Exception as e:
+        print(p, 'ERROR', e)
+        ok=False
+if not ok:
+    sys.exit(1)
+print('All workflow YAML parsed successfully')
+PY
+
   service-smoke-tests:
     name: Service smoke tests
     runs-on: ubuntu-latest
@@ -42,15 +75,130 @@ jobs:
       - name: Quick metrics endpoint smoke (optional)
         run: |
           echo "Metrics smoke test is available locally; skip in CI by default."
-
-      - name: Build service images for smoke tests
+      - name: Determine changed services
+        id: changed
         run: |
-          docker build -t ci-auth-service ./auth
-          docker build -t ci-order-service ./order
-          docker build -t ci-delivery-service ./food-delivery-server
-          docker build -t ci-payment-service ./payment-service
-          docker build -t ci-notification-service ./notification-service
-          docker build -t ci-restaurant ./restaurant
+          git fetch origin main --depth=1 || true
+          CHANGED_FILES=$(git diff --name-only origin/main...HEAD || true)
+          echo "Changed files:"$CHANGED_FILES
+          SERVICES_LIST=""
+          CHECK_DIRS=(auth admin-service order food-delivery-server payment-service notification-service restaurant)
+          for d in "${CHECK_DIRS[@]}"; do
+            if echo "$CHANGED_FILES" | grep -q "^$d/"; then
+              SERVICES_LIST="$SERVICES_LIST $d"
+            fi
+          done
+          if [ -z "$SERVICES_LIST" ]; then
+            SERVICES_LIST="auth admin-service order food-delivery-server payment-service notification-service restaurant"
+          fi
+          SERVICES_LIST=$(echo $SERVICES_LIST | xargs)
+          echo "services=$SERVICES_LIST" >> $GITHUB_OUTPUT
+
+      - name: Cache & install deps for `auth`
+        uses: actions/cache@v4
+        with:
+          path: auth/node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('auth/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install deps for `auth` (if changed)
+        if: contains(steps.changed.outputs.services, 'auth')
+        working-directory: ./auth
+        run: |
+          npm ci --no-audit --no-fund
+
+      - name: Cache & install deps for `admin-service`
+        uses: actions/cache@v4
+        with:
+          path: admin-service/node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('admin-service/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install deps for `admin-service` (if changed)
+        if: contains(steps.changed.outputs.services, 'admin-service')
+        working-directory: ./admin-service
+        run: |
+          npm ci --no-audit --no-fund
+
+      - name: Cache & install deps for `order`
+        uses: actions/cache@v4
+        with:
+          path: order/node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('order/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install deps for `order` (if changed)
+        if: contains(steps.changed.outputs.services, 'order')
+        working-directory: ./order
+        run: |
+          npm ci --no-audit --no-fund
+
+      - name: Cache & install deps for `food-delivery-server`
+        uses: actions/cache@v4
+        with:
+          path: food-delivery-server/node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('food-delivery-server/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install deps for `food-delivery-server` (if changed)
+        if: contains(steps.changed.outputs.services, 'food-delivery-server')
+        working-directory: ./food-delivery-server
+        run: |
+          npm ci --no-audit --no-fund
+
+      - name: Cache & install deps for `payment-service`
+        uses: actions/cache@v4
+        with:
+          path: payment-service/node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('payment-service/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install deps for `payment-service` (if changed)
+        if: contains(steps.changed.outputs.services, 'payment-service')
+        working-directory: ./payment-service
+        run: |
+          npm ci --no-audit --no-fund
+
+      - name: Cache & install deps for `notification-service`
+        uses: actions/cache@v4
+        with:
+          path: notification-service/node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('notification-service/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install deps for `notification-service` (if changed)
+        if: contains(steps.changed.outputs.services, 'notification-service')
+        working-directory: ./notification-service
+        run: |
+          npm ci --no-audit --no-fund
+
+      - name: Cache & install deps for `restaurant`
+        uses: actions/cache@v4
+        with:
+          path: restaurant/node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('restaurant/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install deps for `restaurant` (if changed)
+        if: contains(steps.changed.outputs.services, 'restaurant')
+        working-directory: ./restaurant
+        run: |
+          npm ci --no-audit --no-fund
+
+      - name: Build changed service images
+        run: |
+          set -e
+          for svc in ${{ steps.changed.outputs.services }}; do
+            echo "Building image for $svc"
+            docker build -t ci-${svc//\//-} ./$svc
+          done
 
       - name: Run minimal test compose
         run: |
@@ -75,7 +223,7 @@ jobs:
           )
 
           retry() {
-            local url=$1; local tries=0; local max=15
+            url=$1; tries=0; max=15
             until curl -sSf --max-time 5 "$url" >/dev/null; do
               tries=$((tries+1))
               if [ $tries -ge $max ]; then
