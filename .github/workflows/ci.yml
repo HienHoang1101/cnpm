@@ -1,6 +1,10 @@
 ﻿---
 name: CI
 
+permissions:
+  contents: read
+  packages: write
+
 on:
   push: {}
   pull_request: {}
@@ -84,11 +88,34 @@ jobs:
       - name: Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
 
+      - name: Check GHCR cache
+        id: cache-check
+        env:
+          GHCR_PAT: ${{ secrets.GHCR_PAT }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          REPO_OWNER: ${{ github.repository_owner }}
+        run: |
+          set -e
+          AUTH=${GHCR_PAT:-$GITHUB_TOKEN}
+          if [ -z "$AUTH" ]; then
+            echo "No registry credentials available; assuming no cache" >> /dev/stderr
+            echo "cache_exists=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          status=$(curl -s -o /dev/null -w "%{http_code}" -u "${GITHUB_ACTOR}:${AUTH}" "https://ghcr.io/v2/${REPO_OWNER}/cnpm-build-cache/manifests/cache" || echo "000")
+          if [ "$status" = "200" ]; then
+            echo "cache_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "cache_exists=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Build changed service images
         env:
           SERVICES_JSON: ${{ needs.determine-changed.outputs.services }}
           GHCR_PAT: ${{ secrets.GHCR_PAT }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CACHE_EXISTS: ${{ steps.cache-check.outputs.cache_exists }}
         run: |
           set -euo pipefail
           echo "Services JSON: $SERVICES_JSON"
@@ -107,8 +134,11 @@ jobs:
               gh_image=ghcr.io/${owner_lower}/cnpm-${safe_svc}:sha-${GITHUB_SHA}
               echo "Building and pushing $svc -> $gh_image"
               cache_flags=()
-              if [ -n "${CACHE_REPO}" ]; then
+              if [ "${CACHE_EXISTS:-false}" = "true" ] && [ -n "${CACHE_REPO}" ]; then
+                echo "Registry cache exists; using cache flags"
                 cache_flags=(--cache-from=type=registry,ref=${CACHE_REPO}:cache --cache-to=type=registry,ref=${CACHE_REPO}:cache,mode=max)
+              else
+                echo "Registry cache missing or unavailable; building without registry cache"
               fi
               docker buildx build \
                 --push \
@@ -162,7 +192,7 @@ jobs:
           PORT_MAP=( ["auth-service"]=5001 ["order-service"]=5002 ["delivery-service"]=5004 ["payment-service"]=5005 ["notification-service"]=5007 ["restaurant"]=5006 )
           for svc in $(echo "$SERVICES_JSON" | jq -r '.[]'); do
             safe_svc=${svc//\//-}
-            port=${PORT_MAP[$svc]}
+            port=${PORT_MAP[$svc]:-}
             if [ -z "$port" ]; then
               echo "No port mapping for $svc; skipping"
               continue
