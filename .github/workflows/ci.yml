@@ -80,6 +80,57 @@ jobs:
           JSON="[$ARR]"
           echo "services=$JSON" >> $GITHUB_OUTPUT
 
+  unit-tests:
+    name: Run unit tests for changed services
+    runs-on: ubuntu-latest
+    needs: determine-changed
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Run tests for changed services
+        id: run-tests
+        env:
+          SERVICES_JSON: ${{ needs.determine-changed.outputs.services }}
+        run: |
+          set -euo pipefail
+          echo "Services JSON: $SERVICES_JSON"
+          if [ -z "$SERVICES_JSON" ] || [ "$SERVICES_JSON" = '[]' ]; then
+            echo "No changed services; skipping unit-tests"
+            exit 0
+          fi
+          mkdir -p test-reports
+          for svc in $(echo "$SERVICES_JSON" | jq -r '.[]'); do
+            # Only run tests if package.json exists and has a test script
+            if [ -f "$svc/package.json" ]; then
+              echo "Checking $svc for tests"
+              if grep -q '"test"' "$svc/package.json"; then
+                echo "Running tests for $svc"
+                pushd $svc
+                npm ci --silent
+                # Run tests and output JSON to reports for upload
+                npm test -- --json --outputFile=../test-reports/${svc//\//-}-jest.json || true
+                popd
+              else
+                echo "No test script in $svc/package.json; skipping"
+              fi
+            else
+              echo "No package.json in $svc; skipping"
+            fi
+          done
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-reports
+          path: test-reports
+
+
   build-images:
     name: Build images
     runs-on: ubuntu-latest
