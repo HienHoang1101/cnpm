@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  service-smoke-tests:
+    name: Service smoke tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install restaurant dependencies
+        working-directory: ./restaurant
+        run: |
+          npm ci --no-audit --no-fund
+
+      - name: Install notification-service dependencies
+        working-directory: ./notification-service
+        run: |
+          npm ci --no-audit --no-fund
+
+      - name: Import-check restaurant controller (detect case/missing modules)
+        working-directory: ./restaurant
+        run: |
+          node -e "import('./controller/ResturantController.js').then(()=>console.log('restaurant controller import OK')).catch(e=>{console.error(e); process.exit(1)})"
+
+      - name: Import-check notification-service index (detect case/missing modules)
+        working-directory: ./notification-service
+        run: |
+          node -e "import('./index.js').then(()=>console.log('notification-service import OK')).catch(e=>{console.error(e); process.exit(1)})"
+
+      - name: Quick metrics endpoint smoke (optional)
+        run: |
+          echo "Metrics smoke test is available locally; skip in CI by default."
+
+      - name: Build service images for smoke tests
+        run: |
+          docker build -t ci-auth-service ./auth
+          docker build -t ci-order-service ./order
+          docker build -t ci-delivery-service ./food-delivery-server
+          docker build -t ci-payment-service ./payment-service
+          docker build -t ci-notification-service ./notification-service
+          docker build -t ci-restaurant ./restaurant
+
+      - name: Run minimal test compose
+        run: |
+          docker compose -f ci/docker-compose.test.yml up -d
+
+      - name: Wait for services to become healthy
+        run: |
+          set -e
+          endpoints=(
+            "http://localhost:5001/metrics"
+            "http://localhost:5001/health"
+            "http://localhost:5002/metrics"
+            "http://localhost:5002/health"
+            "http://localhost:5004/metrics"
+            "http://localhost:5004/health"
+            "http://localhost:5005/metrics"
+            "http://localhost:5005/health"
+            "http://localhost:5006/metrics"
+            "http://localhost:5006/health"
+            "http://localhost:5007/metrics"
+            "http://localhost:5007/health"
+          )
+
+          retry() {
+            local url=$1; local tries=0; local max=15
+            until curl -sSf --max-time 5 "$url" >/dev/null; do
+              tries=$((tries+1))
+              if [ $tries -ge $max ]; then
+                echo "Endpoint $url did not become available after $max attempts"
+                return 1
+              fi
+              echo "Waiting for $url... (attempt $tries)"
+              sleep 2
+            done
+            echo "$url ok"
+          }
+
+          for url in "${endpoints[@]}"; do
+            retry "$url"
+          done
+
+      - name: Tear down test compose
+        if: always()
+        run: |
+          docker compose -f ci/docker-compose.test.yml down -v
