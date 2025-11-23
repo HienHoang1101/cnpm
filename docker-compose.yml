@@ -111,7 +111,7 @@ services:
       - "5007:5007"
     environment:
       - PORT=5007
-      - MONGO_URI=${MONGO_URI_Notifications}
+      - MONGO_URI=mongodb://mongo:27017/notifications
       - ENABLE_KAFKA=false
     restart: unless-stopped
 
@@ -124,7 +124,7 @@ services:
       - "5006:5006"
     environment:
       - PORT=5006
-      - MONGOURL=${MONGO_URI_Restaurant}
+      - MONGOURL=mongodb://mongo:27017/restaurant
     restart: unless-stopped
 
   prometheus:
