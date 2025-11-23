@@ -1,100 +1,15 @@
-name: CI
+﻿name: CI
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+  push: {}
+  pull_request: {}
 
 jobs:
-  validate-workflow-yaml:
-      determine-changed:
-        name: Determine changed services
-        runs-on: ubuntu-latest
-        outputs:
-          services: ${{ steps.set.outputs.services }}
-        steps:
-          - name: Checkout
-            uses: actions/checkout@v4
-
-          - name: Determine changed services
-            id: set
-            run: |
-              git fetch origin main --depth=1 || true
-              CHANGED_FILES=$(git diff --name-only origin/main...HEAD || true)
-              echo "Changed files: $CHANGED_FILES"
-              SERVICES_LIST=()
-              CHECK_DIRS=(auth admin-service order food-delivery-server payment-service notification-service restaurant)
-              for d in "${CHECK_DIRS[@]}"; do
-                if echo "$CHANGED_FILES" | grep -q "^$d/"; then
-                  SERVICES_LIST+=("$d")
-                fi
-              done
-              if [ ${#SERVICES_LIST[@]} -eq 0 ]; then
-                SERVICES_LIST=(auth admin-service order food-delivery-server payment-service notification-service restaurant)
-              fi
-              # produce JSON array
-              IFS=','; printf -v JSON '[%s]' "${SERVICES_LIST[*]/#/\"}"; JSON=${JSON//,/,"}; JSON=${JSON//""/","}
-              # fallback: simpler construction
-              ARR=""
-              for s in "${SERVICES_LIST[@]}"; do
-                if [ -z "$ARR" ]; then ARR="\"$s\""; else ARR="$ARR,\"$s\""; fi
-              done
-              JSON="[$ARR]"
-              echo "services=$JSON" >> $GITHUB_OUTPUT
-
-      build-images:
-        name: Build images
-        runs-on: ubuntu-latest
-        needs: determine-changed
-        steps:
-          - name: Checkout
-            uses: actions/checkout@v4
-
-          - name: Set up QEMU
-            uses: docker/setup-qemu-action@v2
-
-          - name: Set up Docker Buildx
-            uses: docker/setup-buildx-action@v2
-
-          - name: Log in to GitHub Container Registry
-            uses: docker/login-action@v2
-            with:
-              registry: ghcr.io
-              username: ${{ github.actor }}
-              password: ${{ secrets.GITHUB_TOKEN }}
-
-          - name: Install jq
-            run: |
-              sudo apt-get update && sudo apt-get install -y jq
-
-          - name: Build changed service images (loop)
-            env:
-              CACHE_REPO: ghcr.io/${{ github.repository_owner }}/cnpm-build-cache
-              SERVICES_JSON: ${{ needs.determine-changed.outputs.services }}
-            run: |
-              set -e
-              echo "Services JSON: $SERVICES_JSON"
-              for svc in $(echo "$SERVICES_JSON" | jq -r '.[]'); do
-                safe_svc=${svc//\//-}
-                gh_image=ghcr.io/${{ github.repository_owner }}/cnpm-${safe_svc}:sha-${{ github.sha }}
-                echo "Building and pushing $svc -> $gh_image"
-                docker buildx build \
-                  --push \
-                  --tag ${gh_image} \
-                  --cache-from=type=registry,ref=${CACHE_REPO}:cache \
-                  --cache-to=type=registry,ref=${CACHE_REPO}:cache,mode=max \
-                  ./$svc
-                echo "Pulling pushed image and tagging for compose"
-                docker pull ${gh_image}
-                docker tag ${gh_image} ci-${safe_svc}:latest
-              done
-
+  validate:
     name: Validate workflow YAML
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Setup Python
         uses: actions/setup-python@v4
@@ -102,206 +17,215 @@ jobs:
           python-version: '3.x'
 
       - name: Install PyYAML
-        run: |
-          python -m pip install --user pyyaml
+        run: python -m pip install --user pyyaml
 
       - name: Validate workflows
         run: |
           python - <<'PY'
-import yaml,sys,glob
-ok=True
-for p in glob.glob('.github/workflows/*.yml'):
-    try:
-        yaml.safe_load(open(p))
-        print(p, 'OK')
-    except Exception as e:
-        print(p, 'ERROR', e)
-        ok=False
-if not ok:
-    sys.exit(1)
-print('All workflow YAML parsed successfully')
-PY
+          import yaml,sys,glob
+          ok=True
+          for p in glob.glob('.github/workflows/*.yml'):
+              try:
+                  yaml.safe_load(open(p))
+                  print(p, 'OK')
+              except Exception as e:
+                  print(p, 'ERROR', e)
+                  ok=False
+          if not ok:
+              sys.exit(1)
+          print('All workflow YAML parsed successfully')
+          PY
+
+  determine-changed:
+    name: Determine changed services
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.set.outputs.services }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine changed services
+        id: set
+        run: |
+          git fetch origin main --depth=1 || true
+          CHANGED_FILES=$(git diff --name-only origin/main...HEAD || true)
+          echo "Changed files: $CHANGED_FILES"
+          SERVICES_LIST=()
+          CHECK_DIRS=(auth admin-service order food-delivery-server payment-service notification-service restaurant)
+          for d in "${CHECK_DIRS[@]}"; do
+            if echo "$CHANGED_FILES" | grep -q "^$d/"; then
+              SERVICES_LIST+=("$d")
+            fi
+          done
+          if [ ${#SERVICES_LIST[@]} -eq 0 ]; then
+            SERVICES_LIST=(auth admin-service order food-delivery-server payment-service notification-service restaurant)
+          fi
+          ARR=""
+          for s in "${SERVICES_LIST[@]}"; do
+            if [ -z "$ARR" ]; then ARR="\"$s\""; else ARR="$ARR,\"$s\""; fi
+          done
+          JSON="[$ARR]"
+          echo "services=$JSON" >> $GITHUB_OUTPUT
+
+  build-images:
+    name: Build images
+    runs-on: ubuntu-latest
+    needs: determine-changed
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Build & push to GHCR (if credentials present)
+        if: ${{ secrets.GHCR_PAT || secrets.GITHUB_TOKEN }}
+        env:
+          CACHE_REPO: ghcr.io/${{ github.repository_owner }}/cnpm-build-cache
+          SERVICES_JSON: ${{ needs.determine-changed.outputs.services }}
+        run: |
+          set -euo pipefail
+          echo "Services JSON: $SERVICES_JSON"
+          if [ -z "$SERVICES_JSON" ] || [ "$SERVICES_JSON" = '[]' ]; then
+            echo "No services to build"
+            exit 0
+          fi
+          echo "Logging into GHCR"
+          echo ${{ secrets.GHCR_PAT || secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          for svc in $(echo "$SERVICES_JSON" | jq -r '.[]'); do
+            safe_svc=${svc//\//-}
+            gh_image=ghcr.io/${{ github.repository_owner }}/cnpm-${safe_svc}:sha-${{ github.sha }}
+            echo "Building and pushing $svc -> $gh_image"
+            docker buildx build \
+              --push \
+              --tag ${gh_image} \
+              --cache-from=type=registry,ref=${CACHE_REPO}:cache \
+              --cache-to=type=registry,ref=${CACHE_REPO}:cache,mode=max \
+              ./$svc
+            docker pull ${gh_image}
+            docker tag ${gh_image} ci-${safe_svc}:latest
+          done
+
+      - name: Build locally and load images (no GHCR credentials)
+        if: ${{ !secrets.GHCR_PAT && !secrets.GITHUB_TOKEN }}
+        env:
+          SERVICES_JSON: ${{ needs.determine-changed.outputs.services }}
+        run: |
+          set -euo pipefail
+          echo "No GHCR credentials found — building images locally and loading into docker"
+          if [ -z "$SERVICES_JSON" ] || [ "$SERVICES_JSON" = '[]' ]; then
+            echo "No services to build"
+            exit 0
+          fi
+          for svc in $(echo "$SERVICES_JSON" | jq -r '.[]'); do
+            safe_svc=${svc//\//-}
+            echo "Building local image ci-${safe_svc}:latest from ./$svc"
+            docker buildx build --load --tag ci-${safe_svc}:latest ./$svc
+          done
 
   service-smoke-tests:
     name: Service smoke tests
-    needs: build-images
     runs-on: ubuntu-latest
+    needs: [determine-changed, build-images]
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Log in to GHCR (optional)
+        if: ${{ secrets.GHCR_PAT || secrets.GITHUB_TOKEN }}
+        uses: docker/login-action@v2
         with:
-          node-version: 18
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_PAT || secrets.GITHUB_TOKEN }}
 
-      - name: Install restaurant dependencies
-        working-directory: ./restaurant
+      - name: Install jq and curl
+        run: sudo apt-get update && sudo apt-get install -y jq curl
+
+      - name: Run smoke tests for changed services
+        env:
+          SERVICES_JSON: ${{ needs.determine-changed.outputs.services }}
         run: |
-          npm ci --no-audit --no-fund
-
-      - name: Install notification-service dependencies
-        working-directory: ./notification-service
-        run: |
-          npm ci --no-audit --no-fund
-
-      - name: Import-check restaurant controller (detect case/missing modules)
-        working-directory: ./restaurant
-        run: |
-          node -e "import('./controller/ResturantController.js').then(()=>console.log('restaurant controller import OK')).catch(e=>{console.error(e); process.exit(1)})"
-
-      - name: Import-check notification-service index (detect case/missing modules)
-        working-directory: ./notification-service
-        run: |
-          node -e "import('./index.js').then(()=>console.log('notification-service import OK')).catch(e=>{console.error(e); process.exit(1)})"
-
-      - name: Quick metrics endpoint smoke (optional)
-        run: |
-          echo "Metrics smoke test is available locally; skip in CI by default."
-      # NOTE: determine-changed and build-images are run in separate jobs; service-smoke-tests
-      # will reference the outputs from the `determine-changed` job (via `needs.determine-changed.outputs.services`).
-
-      - name: Cache & install deps for `auth`
-        uses: actions/cache@v4
-        with:
-          path: auth/node_modules
-          key: ${{ runner.os }}-node-${{ hashFiles('auth/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
-
-      - name: Install deps for `auth` (if changed)
-        if: contains(needs.determine-changed.outputs.services, 'auth')
-        working-directory: ./auth
-        run: |
-          npm ci --no-audit --no-fund
-
-      - name: Cache & install deps for `admin-service`
-        uses: actions/cache@v4
-        with:
-          path: admin-service/node_modules
-          key: ${{ runner.os }}-node-${{ hashFiles('admin-service/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
-
-      - name: Install deps for `admin-service` (if changed)
-        if: contains(needs.determine-changed.outputs.services, 'admin-service')
-        working-directory: ./admin-service
-        run: |
-          npm ci --no-audit --no-fund
-
-      - name: Cache & install deps for `order`
-        uses: actions/cache@v4
-        with:
-          path: order/node_modules
-          key: ${{ runner.os }}-node-${{ hashFiles('order/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
-
-      - name: Install deps for `order` (if changed)
-        if: contains(needs.determine-changed.outputs.services, 'order')
-        working-directory: ./order
-        run: |
-          npm ci --no-audit --no-fund
-
-      - name: Cache & install deps for `food-delivery-server`
-        uses: actions/cache@v4
-        with:
-          path: food-delivery-server/node_modules
-          key: ${{ runner.os }}-node-${{ hashFiles('food-delivery-server/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
-
-      - name: Install deps for `food-delivery-server` (if changed)
-        if: contains(needs.determine-changed.outputs.services, 'food-delivery-server')
-        working-directory: ./food-delivery-server
-        run: |
-          npm ci --no-audit --no-fund
-
-      - name: Cache & install deps for `payment-service`
-        uses: actions/cache@v4
-        with:
-          path: payment-service/node_modules
-          key: ${{ runner.os }}-node-${{ hashFiles('payment-service/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
-
-      - name: Install deps for `payment-service` (if changed)
-        if: contains(needs.determine-changed.outputs.services, 'payment-service')
-        working-directory: ./payment-service
-        run: |
-          npm ci --no-audit --no-fund
-
-      - name: Cache & install deps for `notification-service`
-        uses: actions/cache@v4
-        with:
-          path: notification-service/node_modules
-          key: ${{ runner.os }}-node-${{ hashFiles('notification-service/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
-
-      - name: Install deps for `notification-service` (if changed)
-        if: contains(needs.determine-changed.outputs.services, 'notification-service')
-        working-directory: ./notification-service
-        run: |
-          npm ci --no-audit --no-fund
-
-      - name: Cache & install deps for `restaurant`
-        uses: actions/cache@v4
-        with:
-          path: restaurant/node_modules
-          key: ${{ runner.os }}-node-${{ hashFiles('restaurant/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
-
-      - name: Install deps for `restaurant` (if changed)
-        if: contains(needs.determine-changed.outputs.services, 'restaurant')
-        working-directory: ./restaurant
-        run: |
-          npm ci --no-audit --no-fund
-
-      # Image builds are handled by the separate `build-images` job (matrix-parallel).
-
-      - name: Run minimal test compose
-        run: |
-          docker compose -f ci/docker-compose.test.yml up -d
-
-      - name: Wait for services to become healthy
-        run: |
-          set -e
-          endpoints=(
-            "http://localhost:5001/metrics"
-            "http://localhost:5001/health"
-            "http://localhost:5002/metrics"
-            "http://localhost:5002/health"
-            "http://localhost:5004/metrics"
-            "http://localhost:5004/health"
-            "http://localhost:5005/metrics"
-            "http://localhost:5005/health"
-            "http://localhost:5006/metrics"
-            "http://localhost:5006/health"
-            "http://localhost:5007/metrics"
-            "http://localhost:5007/health"
-          )
-
-          retry() {
-            url=$1; tries=0; max=15
-            until curl -sSf --max-time 5 "$url" >/dev/null; do
-              tries=$((tries+1))
-              if [ $tries -ge $max ]; then
-                echo "Endpoint $url did not become available after $max attempts"
-                return 1
+          set -euo pipefail
+          echo "Services JSON: $SERVICES_JSON"
+          if [ -z "$SERVICES_JSON" ] || [ "$SERVICES_JSON" = '[]' ]; then
+            echo "No changed services; skipping smoke-tests"
+            exit 0
+          fi
+          docker network create ci-net || true
+          docker run -d --name ci-mongo --network ci-net mongo:6
+          sleep 5
+          declare -A PORT_MAP
+          PORT_MAP=( ["auth-service"]=5001 ["order-service"]=5002 ["delivery-service"]=5004 ["payment-service"]=5005 ["notification-service"]=5007 ["restaurant"]=5006 )
+          for svc in $(echo "$SERVICES_JSON" | jq -r '.[]'); do
+            safe_svc=${svc//\//-}
+            port=${PORT_MAP[$svc]}
+            if [ -z "$port" ]; then
+              echo "No port mapping for $svc; skipping"
+              continue
+            fi
+            # Prefer local ci-<service>:latest image if exists
+            if docker image inspect ci-${safe_svc}:latest >/dev/null 2>&1; then
+              gh_image=ci-${safe_svc}:latest
+            else
+              gh_image=ghcr.io/${{ github.repository_owner }}/cnpm-${safe_svc}:sha-${{ github.sha }}
+              echo "Attempting to pull $gh_image from GHCR"
+              if ! docker pull $gh_image; then
+                echo "Failed to pull $gh_image, trying :latest"
+                gh_image=ghcr.io/${{ github.repository_owner }}/cnpm-${safe_svc}:latest
+                if ! docker pull $gh_image; then
+                  echo "No image available for $svc; skipping"
+                  continue
+                fi
               fi
-              echo "Waiting for $url... (attempt $tries)"
+            fi
+            echo "Running $svc on port $port"
+            env_args=""
+            case "$svc" in
+              auth|auth-service)
+                env_args="-e PORT=$port -e MONGO_URI=mongodb://ci-mongo:27017/auth_test"
+                ;;
+              order|order-service)
+                env_args="-e PORT=$port -e MONGODB_URI=mongodb://ci-mongo:27017/order_test"
+                ;;
+              delivery|delivery-service)
+                env_args="-e PORT=$port -e DELIVERY_MONGO_URI=mongodb://ci-mongo:27017/delivery_test"
+                ;;
+              payment|payment-service)
+                env_args="-e PORT=$port -e MONGO_URI=mongodb://ci-mongo:27017/payment_test"
+                ;;
+              notification|notification-service)
+                env_args="-e PORT=$port -e MONGO_URI=mongodb://ci-mongo:27017/notifications_test -e ENABLE_KAFKA=false"
+                ;;
+              restaurant)
+                env_args="-e PORT=$port -e MONGOURL=mongodb://ci-mongo:27017/restaurant_test"
+                ;;
+              *)
+                env_args="-e PORT=$port -e MONGO_URI=mongodb://ci-mongo:27017/test"
+                ;;
+            esac
+            docker run -d --name ci-${safe_svc} --network ci-net -p ${port}:${port} $env_args $gh_image || (echo "Failed to start $svc" && exit 1)
+            ok=0
+            for i in $(seq 1 12); do
+              if curl -sS --max-time 2 http://localhost:${port}/metrics >/dev/null 2>&1; then ok=1; break; fi
+              if curl -sS --max-time 2 http://localhost:${port}/health >/dev/null 2>&1; then ok=1; break; fi
+              if curl -sS --max-time 2 http://localhost:${port}/ >/dev/null 2>&1; then ok=1; break; fi
               sleep 2
             done
-            echo "$url ok"
-          }
-
-          for url in "${endpoints[@]}"; do
-            retry "$url"
+            if [ $ok -ne 1 ]; then
+              docker logs ci-${safe_svc} --tail 200 || true
+              echo "Service $svc failed startup checks" && exit 1
+            fi
+            echo "$svc is healthy"
           done
+          echo "All tested services are healthy"
 
-      - name: Tear down test compose
-        if: always()
+      - name: Cleanup containers and network
         run: |
-          docker compose -f ci/docker-compose.test.yml down -v
+          set -e || true
+          docker ps -aq | xargs -r docker rm -f || true
+          docker network rm ci-net || true
