@@ -242,6 +242,45 @@ jobs:
             done
           fi
 
+      - name: Ensure local images for smoke-tests
+        env:
+          SERVICES_JSON: ${{ needs.determine-changed.outputs.services }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          echo "Ensuring local images for smoke-tests"
+          if [ -z "${SERVICES_JSON:-}" ] || [ "${SERVICES_JSON}" = '[]' ]; then
+            echo "No services to ensure"
+            exit 0
+          fi
+          owner_lower=$(echo "$GITHUB_REPOSITORY" | cut -d'/' -f1 | tr '[:upper:]' '[:lower:]')
+          for svc in $(echo "$SERVICES_JSON" | jq -r '.[]'); do
+            safe_svc=${svc//\//-}
+            if docker image inspect ci-${safe_svc}:latest >/dev/null 2>&1; then
+              echo "Local image ci-${safe_svc}:latest already present"
+              continue
+            fi
+            gh_image=ghcr.io/${owner_lower}/cnpm-${safe_svc}:sha-${GITHUB_SHA}
+            echo "Attempting to pull ${gh_image}"
+            if docker pull ${gh_image}; then
+              docker tag ${gh_image} ci-${safe_svc}:latest
+              continue
+            fi
+            gh_image=ghcr.io/${owner_lower}/cnpm-${safe_svc}:latest
+            echo "Attempting to pull ${gh_image}"
+            if docker pull ${gh_image}; then
+              docker tag ${gh_image} ci-${safe_svc}:latest
+              continue
+            fi
+            echo "No image in GHCR for ${svc} or pull failed; building local image"
+            if [ -d "./$svc" ]; then
+              docker buildx build --load --tag ci-${safe_svc}:latest ./$svc
+            else
+              echo "Service directory ./$svc not found; skipping local build"
+            fi
+          done
+
   service-smoke-tests:
     name: Service smoke tests
     runs-on: ubuntu-latest
