@@ -12,7 +12,7 @@ route:
 receivers:
   - name: 'slack'
     slack_configs:
-      - api_url: '<REDACTED_SLACK_WEBHOOK_URL>'
+      - api_url: 'https://slack-webhook.example.com/placeholder'
         channel: '#alerts'
         text: |-
           [{{ .Status }}] {{ .CommonAnnotations.summary }}
