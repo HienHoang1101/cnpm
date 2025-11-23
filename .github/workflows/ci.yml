@@ -113,12 +113,17 @@ jobs:
               continue
             fi
             echo "Checking $svc for tests"
-            if ! grep -q '"test"' "$svc/package.json"; then
+            # Prefer an explicit unit test script when present
+            if grep -q '"test:unit"' "$svc/package.json"; then
+              TEST_CMD="npm run test:unit --"
+            elif grep -q '"test"' "$svc/package.json"; then
+              TEST_CMD="npm test --"
+            else
               echo "No test script in $svc/package.json; skipping"
               continue
             fi
 
-            echo "Running tests for $svc"
+            echo "Running tests for $svc using: $TEST_CMD"
             pushd $svc
             # Install deps: prefer npm ci when lockfile exists
             if [ -f package-lock.json ]; then
@@ -126,9 +131,15 @@ jobs:
             else
               npm install --silent || { echo "npm install failed for $svc"; any_fail=1; popd; continue; }
             fi
-
-            # Run tests and capture exit code + report (do not abort loop)
-            npm test -- --json --outputFile=../test-reports/${safe_svc}-jest.json || rc=$?; rc=${rc:-0}
+              # Run tests and capture exit code + report (do not abort loop)
+              # Use the chosen command; ensure Jest outputs JSON to the reports dir
+              if [ "${TEST_CMD#npm run}" != "$TEST_CMD" ]; then
+                # TEST_CMD starts with 'npm run', execute via sh -c to preserve args
+                sh -c "$TEST_CMD --json --outputFile=../test-reports/${safe_svc}-jest.json" || rc=$?
+              else
+                $TEST_CMD --json --outputFile=../test-reports/${safe_svc}-jest.json || rc=$?
+              fi
+              rc=${rc:-0}
             if [ "$rc" -ne 0 ]; then
               echo "Tests failed for $svc with exit code $rc"
               any_fail=1
