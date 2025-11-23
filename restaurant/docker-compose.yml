@@ -1,4 +1,4 @@
----
+# yamllint disable rule:document-start
 version: "3.8"
 
 services:

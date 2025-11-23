@@ -5,7 +5,7 @@ permissions:
   contents: read
   packages: write
 
-on:
+'on':
   push: {}
   pull_request: {}
 
@@ -56,14 +56,22 @@ jobs:
           CHANGED_FILES=$(git diff --name-only origin/main...HEAD || true)
           echo "Changed files: $CHANGED_FILES"
           SERVICES_LIST=()
-          CHECK_DIRS=(auth admin-service order food-delivery-server payment-service notification-service restaurant)
+          CHECK_DIRS=(
+            auth
+            admin-service
+            order
+            food-delivery-server
+            payment-service
+            notification-service
+            restaurant
+          )
           for d in "${CHECK_DIRS[@]}"; do
             if echo "$CHANGED_FILES" | grep -q "^$d/"; then
               SERVICES_LIST+=("$d")
             fi
           done
           if [ ${#SERVICES_LIST[@]} -eq 0 ]; then
-            SERVICES_LIST=(auth admin-service order food-delivery-server payment-service notification-service restaurant)
+            SERVICES_LIST=("${CHECK_DIRS[@]}")
           fi
           ARR=""
           for s in "${SERVICES_LIST[@]}"; do
@@ -103,7 +111,9 @@ jobs:
             echo "cache_exists=false" >> $GITHUB_OUTPUT
             exit 0
           fi
-          status=$(curl -s -o /dev/null -w "%{http_code}" -u "${GITHUB_ACTOR}:${AUTH}" "https://ghcr.io/v2/${REPO_OWNER}/cnpm-build-cache/manifests/cache" || echo "000")
+          status=$(curl -s -o /dev/null -w "%{http_code}" \
+            -u "${GITHUB_ACTOR}:${AUTH}" \
+            "https://ghcr.io/v2/${REPO_OWNER}/cnpm-build-cache/manifests/cache" || echo "000")
           if [ "$status" = "200" ]; then
             echo "cache_exists=true" >> $GITHUB_OUTPUT
           else
@@ -124,7 +134,7 @@ jobs:
             exit 0
           fi
           if [ -n "$GHCR_PAT" ] || [ -n "$GITHUB_TOKEN" ]; then
-            echo "Credentials present — will push to GHCR and use registry cache"
+            echo "Credentials present - will push to GHCR and use registry cache"
             echo "${GHCR_PAT:-$GITHUB_TOKEN}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             owner_lower=$(echo "$GITHUB_REPOSITORY" | cut -d'/' -f1 | tr '[:upper:]' '[:lower:]')
             CACHE_REPO=${CACHE_REPO:-ghcr.io/${owner_lower}/cnpm-build-cache}
@@ -136,7 +146,10 @@ jobs:
               cache_flags=()
               if [ "${CACHE_EXISTS:-false}" = "true" ] && [ -n "${CACHE_REPO}" ]; then
                 echo "Registry cache exists; using cache flags"
-                cache_flags=(--cache-from=type=registry,ref=${CACHE_REPO}:cache --cache-to=type=registry,ref=${CACHE_REPO}:cache,mode=max)
+                cache_flags=(
+                  --cache-from=type=registry,ref=${CACHE_REPO}:cache
+                  --cache-to=type=registry,ref=${CACHE_REPO}:cache,mode=max
+                )
               else
                 echo "Registry cache missing or unavailable; building without registry cache"
               fi
@@ -189,7 +202,14 @@ jobs:
           docker run -d --name ci-mongo --network ci-net mongo:6
           sleep 5
           declare -A PORT_MAP
-          PORT_MAP=( ["auth-service"]=5001 ["order-service"]=5002 ["delivery-service"]=5004 ["payment-service"]=5005 ["notification-service"]=5007 ["restaurant"]=5006 )
+          PORT_MAP=(
+            ["auth-service"]=5001
+            ["order-service"]=5002
+            ["delivery-service"]=5004
+            ["payment-service"]=5005
+            ["notification-service"]=5007
+            ["restaurant"]=5006
+          )
           for svc in $(echo "$SERVICES_JSON" | jq -r '.[]'); do
             safe_svc=${svc//\//-}
             port=${PORT_MAP[$svc]:-}
@@ -238,7 +258,9 @@ jobs:
                 env_args="-e PORT=$port -e MONGO_URI=mongodb://ci-mongo:27017/test"
                 ;;
             esac
-            docker run -d --name ci-${safe_svc} --network ci-net -p ${port}:${port} $env_args $gh_image || (echo "Failed to start $svc" && exit 1)
+            docker run -d --name ci-${safe_svc} --network ci-net \
+              -p ${port}:${port} $env_args $gh_image \
+              || (echo "Failed to start $svc" && exit 1)
             ok=0
             for i in $(seq 1 12); do
               if curl -sS --max-time 2 http://localhost:${port}/metrics >/dev/null 2>&1; then ok=1; break; fi
