@@ -1,4 +1,3 @@
----
 global:
   resolve_timeout: 5m
 
@@ -24,8 +23,21 @@ receivers:
 #    email_configs:
 #      - to: 'hienhtt1101@gmail.com'
 #      - to: 'hienhoang1024@gmail.com'
-
 templates: []
+templates: []
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
