@@ -99,16 +99,21 @@ jobs:
           if [ -n "$GHCR_PAT" ] || [ -n "$GITHUB_TOKEN" ]; then
             echo "Credentials present — will push to GHCR and use registry cache"
             echo "${GHCR_PAT:-$GITHUB_TOKEN}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            owner_lower=$(echo "$GITHUB_REPOSITORY" | cut -d'/' -f1 | tr '[:upper:]' '[:lower:]')
+            CACHE_REPO=${CACHE_REPO:-ghcr.io/${owner_lower}/cnpm-build-cache}
+            echo "Using cache repo: ${CACHE_REPO}"
             for svc in $(echo "$SERVICES_JSON" | jq -r '.[]'); do
               safe_svc=${svc//\//-}
-              owner_lower=$(echo "$GITHUB_REPOSITORY" | cut -d'/' -f1 | tr '[:upper:]' '[:lower:]')
               gh_image=ghcr.io/${owner_lower}/cnpm-${safe_svc}:sha-${GITHUB_SHA}
               echo "Building and pushing $svc -> $gh_image"
+              cache_flags=()
+              if [ -n "${CACHE_REPO}" ]; then
+                cache_flags=(--cache-from=type=registry,ref=${CACHE_REPO}:cache --cache-to=type=registry,ref=${CACHE_REPO}:cache,mode=max)
+              fi
               docker buildx build \
                 --push \
                 --tag ${gh_image} \
-                --cache-from=type=registry,ref=${CACHE_REPO}:cache \
-                --cache-to=type=registry,ref=${CACHE_REPO}:cache,mode=max \
+                "${cache_flags[@]}" \
                 ./$svc
               docker pull ${gh_image}
               docker tag ${gh_image} ci-${safe_svc}:latest
