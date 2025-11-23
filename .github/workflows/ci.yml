@@ -102,7 +102,8 @@ jobs:
             echo "${GHCR_PAT:-$GITHUB_TOKEN}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             for svc in $(echo "$SERVICES_JSON" | jq -r '.[]'); do
               safe_svc=${svc//\//-}
-              gh_image=ghcr.io/${{ github.repository_owner }}/cnpm-${safe_svc}:sha-${{ github.sha }}
+              owner_lower=$(echo "$GITHUB_REPOSITORY" | cut -d'/' -f1 | tr '[:upper:]' '[:lower:]')
+              gh_image=ghcr.io/${owner_lower}/cnpm-${safe_svc}:sha-${GITHUB_SHA}
               echo "Building and pushing $svc -> $gh_image"
               docker buildx build \
                 --push \
@@ -166,7 +167,8 @@ jobs:
             if docker image inspect ci-${safe_svc}:latest >/dev/null 2>&1; then
               gh_image=ci-${safe_svc}:latest
             else
-              gh_image=ghcr.io/${{ github.repository_owner }}/cnpm-${safe_svc}:sha-${{ github.sha }}
+              owner_lower=$(echo "$GITHUB_REPOSITORY" | cut -d'/' -f1 | tr '[:upper:]' '[:lower:]')
+              gh_image=ghcr.io/${owner_lower}/cnpm-${safe_svc}:sha-${GITHUB_SHA}
               echo "Attempting to pull $gh_image from GHCR"
               if ! docker pull $gh_image; then
                 echo "Failed to pull $gh_image, trying :latest"
