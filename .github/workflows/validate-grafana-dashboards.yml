@@ -1,0 +1,31 @@
+name: Validate Grafana Dashboards
+
+on:
+  push:
+    paths:
+      - 'monitoring/grafana/**'
+  pull_request:
+    paths:
+      - 'monitoring/grafana/**'
+
+jobs:
+  validate:
+    name: Validate Grafana Dashboards
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node-version: [18.x]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Run Node validator
+        run: |
+          cd monitoring/grafana
+          npm run validate

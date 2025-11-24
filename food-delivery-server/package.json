@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node app.js",
     "dev": "nodemon app.js",
-    "test": "echo \"No tests defined for food-delivery-server (skipping)\""
+    "test": "echo \"No tests defined for food-delivery-server (skipping)\"",
+    "test:unit": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand"
   },
   "keywords": [],
   "author": "",
@@ -31,6 +32,8 @@
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.1",
     "msw": "^2.7.4",
-    "nodemon": "^3.1.9"
+    "nodemon": "^3.1.9",
+    "jest": "^29.7.0",
+    "supertest": "^6.3.3"
   }
 }
