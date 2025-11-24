@@ -216,11 +216,24 @@ jobs:
             echo "No services to build"
             exit 0
           fi
-          if [ -n "$GHCR_PAT" ] || [ -n "$GITHUB_TOKEN" ]; then
+          GHCR_AUTH=false
+          AUTH=${GHCR_PAT:-$GITHUB_TOKEN}
+          if [ -n "$AUTH" ]; then
+            echo "Attempting to login to GHCR to enable registry push/pull"
+            if echo "$AUTH" | docker login ghcr.io -u ${{ github.actor }} --password-stdin; then
+              GHCR_AUTH=true
+            else
+              echo "Warning: GHCR login failed; proceeding with local builds only" >&2
+            fi
+          else
+            echo "No registry credentials found; will build locally" >&2
+          fi
+
+          owner_lower=$(echo "$GITHUB_REPOSITORY" | cut -d'/' -f1 | tr '[:upper:]' '[:lower:]')
+          CACHE_REPO=${CACHE_REPO:-ghcr.io/${owner_lower}/cnpm-build-cache}
+
+          if [ "$GHCR_AUTH" = "true" ]; then
             echo "Credentials present - will push to GHCR and use registry cache"
-            echo "${GHCR_PAT:-$GITHUB_TOKEN}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            owner_lower=$(echo "$GITHUB_REPOSITORY" | cut -d'/' -f1 | tr '[:upper:]' '[:lower:]')
-            CACHE_REPO=${CACHE_REPO:-ghcr.io/${owner_lower}/cnpm-build-cache}
             echo "Using cache repo: ${CACHE_REPO}"
             for svc in $(echo "$SERVICES_JSON" | jq -r '.[]'); do
               safe_svc=${svc//\//-}
@@ -241,15 +254,23 @@ jobs:
                 --tag ${gh_image} \
                 "${cache_flags[@]}" \
                 ./$svc
-              docker pull ${gh_image}
-              docker tag ${gh_image} ci-${safe_svc}:latest
+              # try to pull the pushed image to populate local cache; if pull fails, continue but don't abort workflow
+              if docker pull ${gh_image}; then
+                docker tag ${gh_image} ci-${safe_svc}:latest
+              else
+                echo "Warning: pulled image ${gh_image} not available locally after push" >&2
+              fi
             done
           else
-            echo "No GHCR credentials found — building images locally and loading into docker"
+            echo "No GHCR credentials — building images locally and loading into docker"
             for svc in $(echo "$SERVICES_JSON" | jq -r '.[]'); do
               safe_svc=${svc//\//-}
-              echo "Building local image ci-${safe_svc}:latest from ./$svc"
-              docker buildx build --load --tag ci-${safe_svc}:latest ./$svc
+              if [ -d "./$svc" ]; then
+                echo "Building local image ci-${safe_svc}:latest from ./$svc"
+                docker buildx build --load --tag ci-${safe_svc}:latest ./$svc
+              else
+                echo "Service directory ./$svc not found; skipping local build" >&2
+              fi
             done
           fi
 
@@ -272,19 +293,22 @@ jobs:
               echo "Local image ci-${safe_svc}:latest already present"
               continue
             fi
-            gh_image=ghcr.io/${owner_lower}/cnpm-${safe_svc}:sha-${GITHUB_SHA}
-            echo "Attempting to pull ${gh_image}"
-            if docker pull ${gh_image}; then
-              docker tag ${gh_image} ci-${safe_svc}:latest
+            pulled=false
+            for tag in "sha-${GITHUB_SHA}" "latest"; do
+              gh_image=ghcr.io/${owner_lower}/cnpm-${safe_svc}:$tag
+              echo "Attempting to pull ${gh_image}"
+              if docker pull ${gh_image}; then
+                docker tag ${gh_image} ci-${safe_svc}:latest
+                pulled=true
+                break
+              else
+                echo "Pull failed for ${gh_image} — will try next tag if available"
+              fi
+            done
+            if [ "$pulled" = "true" ]; then
               continue
             fi
-            gh_image=ghcr.io/${owner_lower}/cnpm-${safe_svc}:latest
-            echo "Attempting to pull ${gh_image}"
-            if docker pull ${gh_image}; then
-              docker tag ${gh_image} ci-${safe_svc}:latest
-              continue
-            fi
-            echo "No image in GHCR for ${svc} or pull failed; building local image"
+            echo "No image in GHCR for ${svc} or all pulls failed; building local image"
             if [ -d "./$svc" ]; then
               docker buildx build --load --tag ci-${safe_svc}:latest ./$svc
             else
@@ -344,15 +368,20 @@ jobs:
               gh_image=ci-${safe_svc}:latest
             else
               owner_lower=$(echo "$GITHUB_REPOSITORY" | cut -d'/' -f1 | tr '[:upper:]' '[:lower:]')
-              gh_image=ghcr.io/${owner_lower}/cnpm-${safe_svc}:sha-${GITHUB_SHA}
-              echo "Attempting to pull $gh_image from GHCR"
-                if ! docker pull $gh_image; then
-                echo "Failed to pull $gh_image, trying :latest"
-                gh_image=ghcr.io/${owner_lower}/cnpm-${safe_svc}:latest
-                if ! docker pull $gh_image; then
-                  echo "No image available for $svc; skipping"
-                  continue
+              pulled=false
+              for tag in "sha-${GITHUB_SHA}" "latest"; do
+                gh_image=ghcr.io/${owner_lower}/cnpm-${safe_svc}:$tag
+                echo "Attempting to pull $gh_image from GHCR"
+                if docker pull $gh_image; then
+                  pulled=true
+                  break
+                else
+                  echo "Pull failed for $gh_image"
                 fi
+              done
+              if [ "$pulled" = "false" ]; then
+                echo "No image available for $svc; skipping"
+                continue
               fi
             fi
             echo "Running $svc on port $port"
@@ -442,11 +471,18 @@ jobs:
             if docker image inspect ci-${safe_svc}:latest >/dev/null 2>&1; then
               gh_image=ci-${safe_svc}:latest
             else
-              gh_image=ghcr.io/${owner_lower}/cnpm-${safe_svc}:sha-${GITHUB_SHA}
-              echo "Attempting to pull $gh_image"
-              if ! docker pull $gh_image; then
-                gh_image=ghcr.io/${owner_lower}/cnpm-${safe_svc}:latest
-                docker pull $gh_image || (echo "No image available for $svc; skipping" && continue)
+              pulled=false
+              for tag in "sha-${GITHUB_SHA}" "latest"; do
+                gh_image=ghcr.io/${owner_lower}/cnpm-${safe_svc}:$tag
+                echo "Attempting to pull $gh_image"
+                if docker pull $gh_image; then
+                  pulled=true
+                  break
+                fi
+              done
+              if [ "$pulled" = "false" ]; then
+                echo "No image available for $svc; skipping"
+                continue
               fi
             fi
             echo "Running $svc on port $port"
