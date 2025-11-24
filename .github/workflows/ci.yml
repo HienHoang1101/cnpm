@@ -398,6 +398,147 @@ jobs:
           done
           echo "All tested services are healthy"
 
+  integration-tests:
+    name: Integration tests (container-backed)
+    runs-on: ubuntu-latest
+    needs: [determine-changed, build-images]
+    env:
+      SERVICES_JSON: ${{ needs.determine-changed.outputs.services }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install jq and curl
+        run: sudo apt-get update && sudo apt-get install -y jq curl
+
+      - name: Start integration network and DB
+        run: |
+          set -euo pipefail
+          echo "Services JSON: $SERVICES_JSON"
+          if [ -z "$SERVICES_JSON" ] || [ "$SERVICES_JSON" = '[]' ]; then
+            echo "No changed services; skipping integration-tests"
+            exit 0
+          fi
+          docker network create ci-net || true
+          docker run -d --name ci-mongo --network ci-net mongo:6
+          sleep 5
+          declare -A PORT_MAP
+          PORT_MAP=(
+            ["auth-service"]=5001
+            ["order-service"]=5002
+            ["delivery-service"]=5004
+            ["payment-service"]=5005
+            ["notification-service"]=5007
+            ["restaurant"]=5006
+            ["food-delivery-server"]=5000
+          )
+          owner_lower=$(echo "$GITHUB_REPOSITORY" | cut -d'/' -f1 | tr '[:upper:]' '[:lower:]')
+          for svc in $(echo "$SERVICES_JSON" | jq -r '.[]'); do
+            safe_svc=${svc//\//-}
+            port=${PORT_MAP[$svc]:-}
+            if [ -z "$port" ]; then
+              echo "No port mapping for $svc; skipping"
+              continue
+            fi
+            if docker image inspect ci-${safe_svc}:latest >/dev/null 2>&1; then
+              gh_image=ci-${safe_svc}:latest
+            else
+              gh_image=ghcr.io/${owner_lower}/cnpm-${safe_svc}:sha-${GITHUB_SHA}
+              echo "Attempting to pull $gh_image"
+              if ! docker pull $gh_image; then
+                gh_image=ghcr.io/${owner_lower}/cnpm-${safe_svc}:latest
+                docker pull $gh_image || (echo "No image available for $svc; skipping" && continue)
+              fi
+            fi
+            echo "Running $svc on port $port"
+            env_args=""
+            case "$svc" in
+              auth|auth-service)
+                env_args="-e PORT=$port -e MONGO_URI=mongodb://ci-mongo:27017/auth_test"
+                ;;
+              order|order-service)
+                env_args="-e PORT=$port -e MONGODB_URI=mongodb://ci-mongo:27017/order_test"
+                ;;
+              delivery|delivery-service)
+                env_args="-e PORT=$port -e DELIVERY_MONGO_URI=mongodb://ci-mongo:27017/delivery_test"
+                ;;
+              payment|payment-service)
+                env_args="-e PORT=$port -e MONGO_URI=mongodb://ci-mongo:27017/payment_test"
+                ;;
+              notification|notification-service)
+                env_args="-e PORT=$port -e MONGO_URI=mongodb://ci-mongo:27017/notifications_test -e ENABLE_KAFKA=false"
+                ;;
+              restaurant)
+                env_args="-e PORT=$port -e MONGOURL=mongodb://ci-mongo:27017/restaurant_test"
+                ;;
+              food-delivery-server)
+                env_args="-e PORT=$port -e MONGO_URI=mongodb://ci-mongo:27017/foodapp_test"
+                ;;
+              *)
+                env_args="-e PORT=$port -e MONGO_URI=mongodb://ci-mongo:27017/test"
+                ;;
+            esac
+            docker run -d --name ci-${safe_svc} --network ci-net -p ${port}:${port} $env_args $gh_image || (echo "Failed to start $svc" && exit 1)
+          done
+
+      - name: Run integration tests for changed services
+        env:
+          SERVICES_JSON: ${{ needs.determine-changed.outputs.services }}
+        run: |
+          set -euo pipefail
+          mkdir -p integration-reports
+          any_fail=0
+          for svc in $(echo "$SERVICES_JSON" | jq -r '.[]'); do
+            safe_svc=${svc//\//-}
+            if [ ! -f "$svc/package.json" ]; then
+              echo "No package.json in $svc; skipping integration tests"
+              continue
+            fi
+            echo "Checking $svc for integration tests"
+            if grep -q '"test:integration"' "$svc/package.json"; then
+              TEST_CMD="npm run test:integration --"
+            elif grep -q '"test"' "$svc/package.json"; then
+              TEST_CMD="npm test --"
+            else
+              echo "No test script in $svc/package.json; skipping"
+              continue
+            fi
+            echo "Running integration tests for $svc using: $TEST_CMD"
+            pushd $svc
+            if [ -f package-lock.json ]; then
+              npm ci --silent || { echo "npm ci failed for $svc"; any_fail=1; popd; continue; }
+            else
+              npm install --silent || { echo "npm install failed for $svc"; any_fail=1; popd; continue; }
+            fi
+            sh -c "$TEST_CMD" || rc=$?
+            rc=${rc:-0}
+            if [ "$rc" -ne 0 ]; then
+              echo "Integration tests failed for $svc with exit code $rc"
+              any_fail=1
+            else
+              echo "Integration tests passed for $svc"
+            fi
+            unset rc
+            popd
+          done
+          if [ "$any_fail" -ne 0 ]; then
+            echo "One or more integration test suites failed"
+            exit 1
+          fi
+
+      - name: Tear down integration containers
+        if: always()
+        run: |
+          set -e
+          for c in $(docker ps -a --filter "name=ci-" --format "{{.Names}}"); do docker rm -f $c || true; done
+          docker network rm ci-net || true
+
+      - name: Upload integration reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-reports
+          path: integration-reports
+
       - name: Cleanup containers and network
         run: |
           set -e || true
