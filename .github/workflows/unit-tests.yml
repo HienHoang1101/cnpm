@@ -2,18 +2,27 @@ name: Unit Tests (per-service)
 
 on:
   push:
-    branches: [ '**' ]
+    branches:
+      - "**"
   pull_request:
-    branches: [ '**' ]
+    branches:
+      - "**"
 
 jobs:
   unit-tests:
     name: Unit tests — ${{ matrix.service }}
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        service: [auth,payment-service,order,admin-service,restaurant,notification-service,food-delivery-server]
+      strategy:
+        fail-fast: false
+        matrix:
+          service:
+            - auth
+            - payment-service
+            - order
+            - admin-service
+            - restaurant
+            - notification-service
+            - food-delivery-server
 
     steps:
       - name: Checkout repository
@@ -28,7 +37,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ matrix.service }}/node_modules
-          key: "npm-${{ matrix.service }}-${{ hashFiles(matrix.service + '/package-lock.json') }}"
+          # Build a stable cache key per service. Use format() to build the path for hashFiles()
+          key: ${{ join('-', ['npm', matrix.service, hashFiles(format('{0}/package-lock.json', matrix.service))]) }}
           restore-keys: |
             npm-${{ matrix.service }}-
 
