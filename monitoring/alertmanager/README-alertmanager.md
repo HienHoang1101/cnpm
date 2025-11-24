@@ -28,8 +28,39 @@ Testing alerts
 - Example:
   echo "[{'labels': {'alertname':'TestAlert','project':'fastfood_delivery'}, 'annotations': {'summary':'test','description':'desc'}}]" | curl -XPOST -H "Content-Type: application/json" --data @- http://localhost:9093/api/v1/alerts
 
-If you want, tôi có thể:
-- a) tạo một tập tin `alertmanager.yml.tpl` (template) và ví dụ script để inject webhook từ env var, hoặc
-- b) hướng dẫn cụ thể cho Helm/kustomize để triển khai Alertmanager với secrets.
+If you want, tôi đã thêm một workflow tiện lợi để tạo config từ template:
 
-Bạn muốn tôi thực hiện (a) tạo template + inject script, hay (b) hướng dẫn Helm/kustomize cụ thể?
+- Template file: `monitoring/alertmanager/alertmanager.yml.tpl` (contains placeholders `@@SLACK_FASTFOOD@@` and `@@SLACK_DEFAULT@@`).
+- Generator scripts:
+  - Bash: `monitoring/alertmanager/generate_alertmanager.sh`
+  - PowerShell: `monitoring/alertmanager/generate_alertmanager.ps1`
+
+Usage (Linux / macOS):
+
+```bash
+cd monitoring/alertmanager
+export SLACK_WEBHOOK_FASTFOOD="https://hooks.slack.com/services/XXX/YYY/AAA"
+# optionally export SLACK_WEBHOOK_DEFAULT
+./generate_alertmanager.sh
+# Then run docker-compose (from repository root)
+cd ../.. 
+docker-compose up -d
+```
+
+Usage (Windows PowerShell):
+
+```powershell
+cd monitoring/alertmanager
+$env:SLACK_WEBHOOK_FASTFOOD = 'https://hooks.slack.com/services/XXX/YYY/AAA'
+# optionally set $env:SLACK_WEBHOOK_DEFAULT
+.\generate_alertmanager.ps1
+# Then run docker-compose from repo root
+cd ..\..
+docker-compose up -d
+```
+
+The scripts generate `monitoring/alertmanager/generated/alertmanager.yml` which you can mount into the Alertmanager container (the repository's `monitoring/docker-compose.yml` still mounts the repo `alertmanager/alertmanager.yml` by default). Replace that mount or edit `docker-compose.yml` to point to the generated file when deploying.
+
+If you prefer, tôi có thể thêm a) a small wrapper that runs the generator and then starts `docker-compose`, or b) Helm/kustomize examples to read webhook values from Kubernetes Secrets.
+
+Choose which you prefer and tôi sẽ tiếp tục.
