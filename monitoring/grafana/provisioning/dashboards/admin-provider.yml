@@ -1,0 +1,11 @@
+---
+apiVersion: 1
+providers:
+  - name: 'admin-service-dashboards'
+    orgId: 1
+    folder: 'Admin'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    options:
+      path: /var/lib/grafana/dashboards/admin

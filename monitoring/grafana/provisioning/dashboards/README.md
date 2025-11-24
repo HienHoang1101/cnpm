@@ -13,3 +13,11 @@ Each service gets its own subfolder; provisioning providers can point to subfold
 The provider `auth-provider.yml` and `auth-dashboard-config.yml` instruct Grafana to load dashboards from the `Auth` folder; you can add similar provider files per service if you prefer grouping them in Grafana's UI by folder.
 
 When running Grafana with docker-compose, mount `monitoring/grafana/dashboards` to `/var/lib/grafana/dashboards` in the container. After Grafana starts, the new dashboards will be available in the UI.
+
+Validation
+
+- Use `monitoring/grafana/validate_dashboards.sh` to validate JSON dashboards before deploying. Requires `jq`.
+
+Provisioning providers
+
+- Added per-service provider files under `monitoring/grafana/provisioning/dashboards/` for `Auth`, `Admin`, `Order`, `Payment`, `Notification`, `Restaurant`, and `Food-Delivery-Server`. These providers map each service folder to a Grafana folder name.
