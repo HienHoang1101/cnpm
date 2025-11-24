@@ -4,16 +4,31 @@ global:
 
 route:
   receiver: 'slack'
-  group_by: ['alertname', 'service']
+  group_by: ['alertname', 'service', 'project']
   group_wait: 30s
   group_interval: 5m
   repeat_interval: 3h
+  routes:
+    # Route alerts for the fastfood_delivery project to a dedicated Slack receiver
+    - match:
+        project: "fastfood_delivery"
+      receiver: 'slack-fastfood'
+      continue: false
 
 receivers:
   - name: 'slack'
     slack_configs:
       - api_url: 'https://slack-webhook.example.com/placeholder'
         channel: '#alerts'
+        text: |-
+          [{{ .Status }}] {{ .CommonAnnotations.summary }}
+          {{ .CommonAnnotations.description }}
+          *Labels:* {{ range $k, $v := .CommonLabels }}{{$k}}={{$v}} {{end}}
+
+  - name: 'slack-fastfood'
+    slack_configs:
+      - api_url: 'https://slack-webhook.example.com/fastfood-placeholder'
+        channel: '#fastfood-alerts'
         text: |-
           [{{ .Status }}] {{ .CommonAnnotations.summary }}
           {{ .CommonAnnotations.description }}
