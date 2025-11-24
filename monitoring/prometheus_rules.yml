@@ -42,3 +42,16 @@ groups:
         annotations:
           summary: "High latency (P95) on {{ $labels.service }}"
           description: "P95 latency > 1s for last 5 minutes"
+
+      - alert: MissingMetrics
+        expr: |
+          (
+            up == 0
+          ) or absent(http_request_duration_ms_count{project="fastfood_delivery"})
+        for: 2m
+        labels:
+          severity: critical
+          project: "fastfood_delivery"
+        annotations:
+          summary: "Metrics missing or target down ({{ $labels.job }})"
+          description: "Target is down or not exposing Prometheus metrics for project fastfood_delivery; check /metrics endpoint or scraping configuration"
