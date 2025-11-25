@@ -1,0 +1,38 @@
+## URL của GitLab (để mặc định nếu dùng gitlab.com)
+gitlabUrl: https://gitlab.com/
+
+## Dán Token bạn đã copy ở Giai đoạn 1 vào đây
+runnerToken: glrt-8C5jToeSQ2bK__CGTjI94286MQpwOjE5ZzFqdgp0OjMKdTppeGE1ZBg.01.1j0ucpsl8
+
+## Cấu hình RBAC để Runner có quyền tạo Pod
+rbac:
+  create: true
+
+## Cấu hình cho Runner Executor
+runners:
+  config: |
+    [[runners]]
+      [runners.kubernetes]
+        namespace = "{{.Release.Namespace}}"
+        image = "ubuntu:20.04"
+        # Bắt buộc đặt là true để chạy được lệnh 'docker build'
+        privileged = true
+      
+      # Cấu hình tài nguyên cho container CI/CD (Job)
+      [runners.kubernetes.node_selector]
+        # (Tùy chọn) Nếu muốn gán vào node cụ thể
+      [runners.kubernetes.resource_limits]
+        memory = "1Gi"
+        cpu = "1000m"
+      [runners.kubernetes.resource_requests]
+        memory = "512Mi"
+        cpu = "500m"
+
+## Cấu hình tài nguyên cho bản thân Runner Controller (Pod quản lý)
+resources:
+  limits:
+    memory: 256Mi
+    cpu: 200m
+  requests:
+    memory: 128Mi
+    cpu: 100m
