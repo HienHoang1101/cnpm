@@ -4,7 +4,8 @@ import express from "express";
 import mongoose from "mongoose";
 import paymentRoutes from "./routes/paymentRoutes.js";
 
-dotenv.config();
+dotenv.config({ path: "../.env" }); // 👈 thêm dòng này
+console.log("🔑 Stripe secret:", process.env.STRIPE_WEBHOOK_SECRET);
 
 // Initialize Express
 const app = express();
