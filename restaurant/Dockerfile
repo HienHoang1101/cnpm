@@ -11,6 +11,10 @@ RUN npm install --production
 # Copy application code
 COPY . .
 
+# Add local shims into node_modules so imports like `shared-kafka` resolve
+# during runtime (useful for local development builds).
+RUN mkdir -p node_modules/shared-kafka && cp -R shims/shared-kafka/* node_modules/shared-kafka/ || true
+
 # Expose the port the app runs on
 EXPOSE 5006
 

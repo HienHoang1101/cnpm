@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const morgan = require('morgan');
+const client = require('prom-client');
 const { createServer } = require('http');
 const { setupSocket } = require('./services/socket');
 const deliveryRoutes = require('./routes/deliveryRoutes');
@@ -16,6 +17,34 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5004;
+
+// --- MONITORING: Prometheus client setup (CommonJS) ---
+client.collectDefaultMetrics();
+
+const httpRequestDuration = new client.Histogram({
+  name: 'http_request_duration_seconds',
+  help: 'Duration of HTTP requests in seconds',
+  labelNames: ['method', 'route', 'code'],
+  buckets: [0.1, 0.3, 0.5, 1, 3, 5]
+});
+
+app.use((req, res, next) => {
+  const end = httpRequestDuration.startTimer();
+  res.on('finish', () => {
+    end({ method: req.method, route: req.route ? req.route.path : req.path, code: res.statusCode });
+  });
+  next();
+});
+
+app.get('/metrics', async (req, res) => {
+  try {
+    res.set('Content-Type', client.register.contentType);
+    res.end(await client.register.metrics());
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+});
+// --- end monitoring ---
 
 // Middleware
 app.use(cors({
