@@ -71,3 +71,21 @@ jobs:
             🐳 Build Docker: ${{ needs.build-push-docker.result }}
             
             🔗 Chi tiết: https://github.com/${{ github.repository }}/actions
+
+  # JOB 4: TEST AUTH SERVICE
+  test-auth-service:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install & Test Auth Service
+        working-directory: ./auth
+        run: |
+          npm ci || npm install
+          npm test
