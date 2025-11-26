@@ -4,6 +4,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import morgan from "morgan";
 import cookieParser from "cookie-parser";
+import client from "prom-client";
 
 import orderRoutes from "./routes/orderRoute.js";
 import cartRoutes from "./routes/cartRoute.js";
@@ -11,6 +12,33 @@ import cartRoutes from "./routes/cartRoute.js";
 dotenv.config();
 
 const app = express();
+
+// --- MONITORING: Prometheus client setup ---
+const collectDefaultMetrics = client.collectDefaultMetrics;
+collectDefaultMetrics({ timeout: 5000 });
+
+const httpRequestDurationMicroseconds = new client.Histogram({
+  name: "http_request_duration_seconds",
+  help: "Duration of HTTP requests in seconds",
+  labelNames: ["method", "route", "code"],
+  buckets: [0.1, 0.3, 0.5, 0.7, 1, 3, 5, 7, 10],
+});
+
+// Middleware đo thời gian request cho mọi API
+app.use((req, res, next) => {
+  const end = httpRequestDurationMicroseconds.startTimer();
+  res.on("finish", () => {
+    end({ method: req.method, route: req.route ? req.route.path : req.path, code: res.statusCode });
+  });
+  next();
+});
+
+// Endpoint để Prometheus scrap metrics
+app.get("/metrics", async (req, res) => {
+  res.set("Content-Type", client.register.contentType);
+  res.end(await client.register.metrics());
+});
+// --- KẾT THÚC ĐOẠN MÃ MONITORING ---
 
 // Middleware
 app.use(
