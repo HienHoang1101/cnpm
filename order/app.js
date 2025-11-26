@@ -5,6 +5,8 @@ import dotenv from "dotenv";
 import morgan from "morgan";
 import cookieParser from "cookie-parser";
 import client from "prom-client";
+import swaggerJsDoc from "swagger-jsdoc";
+import swaggerUi from "swagger-ui-express";
 
 import orderRoutes from "./routes/orderRoute.js";
 import cartRoutes from "./routes/cartRoute.js";
@@ -62,6 +64,23 @@ global.gConfig = {
 // Routes
 app.use("/api/orders", orderRoutes);
 app.use("/api/cart", cartRoutes);
+
+// --- SWAGGER: OpenAPI / API Docs ---
+const swaggerOptions = {
+  definition: {
+    openapi: "3.0.0",
+    info: {
+      title: "Order Service API",
+      version: "1.0.0",
+      description: "APIs for the Order microservice",
+    },
+  },
+  apis: ["./controller/*.js"],
+};
+
+const swaggerDocs = swaggerJsDoc(swaggerOptions);
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocs));
+// --- END SWAGGER ---
 
 // Health check endpoint
 app.get("/health", (req, res) => {
