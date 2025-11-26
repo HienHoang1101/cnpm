@@ -40,3 +40,13 @@ scrape_configs:
       - targets: ['restaurant:5006']
 
   # Thêm các service khác (payment, auth...) tương tự khi bạn đã gắn code metrics
+
+# Alerting configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+
+# Rule files (drop-in alerting rules)
+rule_files:
+  - 'rules/test_alerts.yml'
