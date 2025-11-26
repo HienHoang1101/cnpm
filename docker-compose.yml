@@ -12,7 +12,7 @@ services:
     environment:
       - PORT=${A_PORT}
       - NODE_ENV=${NODE_ENV}
-      - MONGO_URI=${MONGO_URI_Auth}
+      - MONGO_URI=mongodb://mongo:27017/auth
       - JWT_SECRET=${JWT_SECRET}
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
       - JWT_EXPIRE=${JWT_EXPIRE}
@@ -51,7 +51,7 @@ services:
     environment:
       - PORT=${PORT}
       - NODE_ENV=${NODE_ENV}
-      - MONGODB_URI=${MONGODB_URI_Order}
+      - MONGODB_URI=mongodb://mongo:27017/order
       - JWT_SECRET=${JWT_SECRET}
       - AUTH_SERVICE_URL=${AUTH_SERVICE_URL}
       - ADMIN_SERVICE_URL=${ADMIN_SERVICE_URL}
@@ -89,17 +89,33 @@ services:
     ports:
       - "${PORT_Payment}:5005"
     environment:
-      - MONGO_URI=${MONGO_URI_Payment}
+      - MONGO_URI=mongodb://mongo:27017/payment
       - PAYHERE_MERCHANT_ID=${PAYHERE_MERCHANT_ID}
       - PAYHERE_SECRET=${PAYHERE_SECRET}
       - PAYHERE_BASE_URL=${PAYHERE_BASE_URL}
-      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_SECRET_KEY=REPLACED_STRIPE_KEY
       - PORT=${PORT_Payment}
       - AUTH_SERVICE_URL=${AUTH_SERVICE_URL}
       - RESTAURANT_SERVICE_URL=${RESTAURANT_SERVICE_URL}
       - ORDER_SERVICE_URL=${ORDER_SERVICE_URL}
       - CORS_ORIGIN=${CORS_ORIGIN}
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+    restart: unless-stopped
+
+  notification-service:
+    build:
+      context: ./notification-service
+      dockerfile: Dockerfile
+    container_name: notification-service
+    ports:
+      - "${PORT_Notification:-5007}:5007"
+    environment:
+      - PORT=${PORT_Notification}
+      - NODE_ENV=${NODE_ENV}
+      - MONGO_URI=mongodb://mongo:27017/notification
+      - AUTH_SERVICE_URL=${AUTH_SERVICE_URL}
+      - ORDER_SERVICE_URL=${ORDER_SERVICE_URL}
+      - ENABLE_KAFKA=${ENABLE_KAFKA}
     restart: unless-stopped
   mongo:
     image: mongo:6
@@ -108,6 +124,37 @@ services:
       - "27017:27017"
     volumes:
       - mongo_data:/data/db
+    restart: unless-stopped
+
+  # --- THÊM PHẦN NÀY VÀO CUỐI ---
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin  # Mật khẩu đăng nhập Grafana
+    depends_on:
+      - prometheus
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    restart: unless-stopped
+
+  node-exporter: # Để đo thông số phần cứng (CPU/RAM)
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    ports:
+      - "9100:9100"
     restart: unless-stopped
 
 volumes:

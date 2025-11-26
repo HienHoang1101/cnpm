@@ -1,0 +1,73 @@
+name: Food Delivery CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  # JOB 1: TEST ORDER SERVICE
+  test-order-service:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install Dependencies
+        working-directory: ./order
+        run: npm install
+
+      - name: Run Tests
+        working-directory: ./order
+        run: npm test
+
+  # JOB 2: BUILD & PUSH DOCKER (Chỉ chạy khi Test PASS)
+  build-push-docker:
+    needs: test-order-service
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' # Chỉ build khi merge code, không build khi pull request
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and Push Order Service
+        uses: docker/build-push-action@v4
+        with:
+          context: ./order
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/food-order-service:latest
+
+  # JOB 3: NOTIFY TELEGRAM (Báo cáo kết quả)
+  notify-telegram:
+    needs: [test-order-service, build-push-docker]
+    runs-on: ubuntu-latest
+    if: always() # Luôn chạy dù thành công hay thất bại
+    steps:
+      - name: Send Telegram Notification
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_TOKEN }}
+          message: |
+            🤖 **CI/CD Pipeline Report**
+            --------------------------------------
+            📂 Repository: ${{ github.repository }}
+            👤 Committer: ${{ github.actor }}
+            📝 Message: ${{ github.event.head_commit.message }}
+            
+            ✅ Test Status: ${{ needs.test-order-service.result }}
+            🐳 Build Docker: ${{ needs.build-push-docker.result }}
+            
+            🔗 Chi tiết: https://github.com/${{ github.repository }}/actions
