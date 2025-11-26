@@ -10,7 +10,7 @@ services:
     ports:
       - "${A_PORT}:5001"
     environment:
-      - PORT=${A_PORT}
+      - PORT=5001
       - NODE_ENV=${NODE_ENV}
       - MONGO_URI=mongodb://mongo:27017/auth
       - JWT_SECRET=${JWT_SECRET}
@@ -33,7 +33,7 @@ services:
     ports:
       - "${PORT_Admin}:5008"
     environment:
-      - PORT=${PORT_Admin}
+      - PORT=5008
       - MONGO_URI=${MONGO_URI_Admin}
       - AUTH_SERVICE_URL=${AUTH_SERVICE_URL}
       - RESTAURANT_SERVICE_URL=${RESTAURANT_SERVICE_URL}
@@ -49,7 +49,7 @@ services:
     ports:
       - "${PORT}:5002"
     environment:
-      - PORT=${PORT}
+      - PORT=5002
       - NODE_ENV=${NODE_ENV}
       - MONGODB_URI=mongodb://mongo:27017/order
       - JWT_SECRET=${JWT_SECRET}
@@ -67,7 +67,7 @@ services:
     ports:
       - "${PORT_Delivery}:5004"
     environment:
-      - PORT=${PORT_Delivery}
+      - PORT=5004
       - DELIVERY_MONGO_URI=${MONGO_URI_Delivery}
       - AUTH_SERVICE_URL=${AUTH_SERVICE_URL}
       - ORDER_SERVICE_URL=${ORDER_SERVICE_URL}
@@ -87,14 +87,14 @@ services:
       dockerfile: Dockerfile
     container_name: payment-service
     ports:
-      - "${PORT_Payment}:5005"
+      - "${PORT_Payment}:5004"
     environment:
       - MONGO_URI=mongodb://mongo:27017/payment
       - PAYHERE_MERCHANT_ID=${PAYHERE_MERCHANT_ID}
       - PAYHERE_SECRET=${PAYHERE_SECRET}
       - PAYHERE_BASE_URL=${PAYHERE_BASE_URL}
       - STRIPE_SECRET_KEY=sk_test_placeholder_for_local
-      - PORT=${PORT_Payment}
+      - PORT=5004
       - AUTH_SERVICE_URL=${AUTH_SERVICE_URL}
       - RESTAURANT_SERVICE_URL=${RESTAURANT_SERVICE_URL}
       - ORDER_SERVICE_URL=${ORDER_SERVICE_URL}
@@ -110,12 +110,23 @@ services:
     ports:
       - "${PORT_Notification:-5007}:5007"
     environment:
-      - PORT=${PORT_Notification}
+      - PORT=5007
       - NODE_ENV=${NODE_ENV}
       - MONGO_URI=mongodb://mongo:27017/notification
       - AUTH_SERVICE_URL=${AUTH_SERVICE_URL}
       - ORDER_SERVICE_URL=${ORDER_SERVICE_URL}
       - ENABLE_KAFKA=${ENABLE_KAFKA}
+    restart: unless-stopped
+  restaurant:
+    build:
+      context: ./restaurant
+      dockerfile: Dockerfile
+    container_name: restaurant
+    ports:
+      - "${PORT_Restaurant}:5006"
+    environment:
+      - PORT=5006
+      - MONGOURL=${MONGO_URI_Restaurant}
     restart: unless-stopped
   mongo:
     image: mongo:6
