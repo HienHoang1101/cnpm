@@ -9,7 +9,8 @@ dotenv.config();
 const app = express();
 
 // --- MONITORING: Prometheus client setup ---
-import client from "prom-client";
+import { client, register } from "./utils/metrics.js";
+
 client.collectDefaultMetrics();
 
 const httpRequestDuration = new client.Histogram({
@@ -28,8 +29,12 @@ app.use((req, res, next) => {
 });
 
 app.get("/metrics", async (req, res) => {
-  res.set("Content-Type", client.register.contentType);
-  res.end(await client.register.metrics());
+  try {
+    res.set("Content-Type", register.contentType);
+    res.end(await register.metrics());
+  } catch (ex) {
+    res.status(500).send(ex.message || ex);
+  }
 });
 // --- end monitoring ---
 
