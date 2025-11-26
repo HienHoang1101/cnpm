@@ -11,7 +11,9 @@ receivers:
   - name: 'telegram'
     telegram_configs:
       - bot_token: 'BOT_TOKEN_HERE'
-        chat_id: 'CHAT_ID_HERE'
+        # Replace CHAT_ID with your numeric Telegram chat id (integer).
+        # Use 0 as a placeholder so Alertmanager can start; set your real id in production.
+        chat_id: 0
         send_resolved: true
         # You can customize the message format using templates if needed
 
