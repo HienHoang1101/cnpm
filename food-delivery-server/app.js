@@ -11,11 +11,32 @@ const { protect } = require('./middleware/auth');
 const { checkHealth } = require('./middleware/health');
 const authRoutes = require('./routes/authRoutes');
 const liveDriverRoutes = require('./routes/liveDrivers');
+const client = require('prom-client');
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5004;
+
+/* ==== Metrics ==== */
+client.collectDefaultMetrics();
+
+const httpRequestDuration = new client.Histogram({
+  name: 'http_request_duration_ms',
+  help: 'Thời gian xử lý HTTP request',
+  labelNames: ['method', 'route', 'status_code'],
+  buckets: [50, 100, 200, 500, 1000, 2000],
+});
+
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    httpRequestDuration
+      .labels(req.method, req.route?.path || req.path, res.statusCode)
+      .observe(Date.now() - start);
+  });
+  next();
+});
 
 // Middleware
 app.use(cors({
@@ -48,6 +69,16 @@ app.get('/health', (req, res) => {
     status: 'ok',
     service: 'delivery-service'
   });
+});
+
+// Metrics endpoint for Prometheus
+app.get('/metrics', async (req, res) => {
+  try {
+    res.set('Content-Type', client.register.contentType);
+    res.end(await client.register.metrics());
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
 });
 
 

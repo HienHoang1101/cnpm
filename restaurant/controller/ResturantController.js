@@ -3,7 +3,15 @@ import { Dish } from "../model/dish.js";
 import bcrypt from "bcryptjs";
 import dotenv from "dotenv";
 import { ref, deleteObject } from "firebase/storage";
-import { sendKafkaNotification } from "shared-kafka";
+let sendKafkaNotification = async () => {};
+try {
+  const kafkaMod = await import("shared-kafka");
+  if (kafkaMod && kafkaMod.sendKafkaNotification) {
+    sendKafkaNotification = kafkaMod.sendKafkaNotification;
+  }
+} catch (err) {
+  console.warn("shared-kafka not available, continuing without Kafka notifications");
+}
 import axios from "axios";
 dotenv.config();
 

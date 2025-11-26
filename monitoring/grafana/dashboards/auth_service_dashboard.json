@@ -1,0 +1,73 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "gnetId": null,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": "Prometheus",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "id": 1,
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (job, le) (rate(http_request_duration_ms_bucket{job=~\".*auth.*\"}[5m])))",
+          "legendFormat": "{{job}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Auth Service P95 Latency (ms)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "id": 2,
+      "targets": [
+        {"expr": "sum by (job) (rate(http_request_duration_ms_count{job=~\".*auth.*\"}[1m]))", "legendFormat": "{{job}}", "refId": "A"}
+      ],
+      "title": "Auth Request Rate (req/s)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "id": 3,
+      "targets": [
+        {"expr": "sum by (job) (rate(process_cpu_user_seconds_total{job=~\".*auth.*\"}[1m]) + rate(process_cpu_system_seconds_total{job=~\".*auth.*\"}[1m]))", "legendFormat": "{{job}}", "refId": "A"}
+      ],
+      "title": "Auth Process CPU (cores)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "id": 4,
+      "targets": [
+        {"expr": "sum by (job) (process_resident_memory_bytes{job=~\".*auth.*\"})", "legendFormat": "{{job}}", "refId": "A"}
+      ],
+      "title": "Auth Memory (bytes)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "gridPos": {"h": 6, "w": 24, "x": 0, "y": 16},
+      "id": 5,
+      "targets": [
+        {"expr": "sum by (status_code) (rate(http_request_duration_ms_count{job=~\".*auth.*\"}[5m]))", "legendFormat": "{{status_code}}", "refId": "A"}
+      ],
+      "title": "Auth Status Code Distribution (5m)",
+      "type": "barchart"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 36,
+  "style": "dark",
+  "tags": ["auth","fastfood"],
+  "templating": {"list": []},
+  "time": {"from": "now-5m", "to": "now"},
+  "title": "Auth Service - Detailed",
+  "uid": "auth-service-detailed",
+  "version": 1
+}

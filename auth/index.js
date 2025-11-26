@@ -4,9 +4,30 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import morgan from "morgan";
 import dotenv from "dotenv";
+import client from "prom-client";
 
 dotenv.config();
 const app = express();
+
+/* -------------------- PROMETHEUS METRICS SETUP -------------------- */
+client.collectDefaultMetrics();
+
+const httpRequestDuration = new client.Histogram({
+  name: "http_request_duration_ms",
+  help: "HTTP request duration in ms",
+  labelNames: ["method", "route", "status_code"],
+  buckets: [50, 100, 200, 500, 1000, 2000],
+});
+
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on("finish", () => {
+    httpRequestDuration
+      .labels(req.method, req.route?.path || req.path, res.statusCode)
+      .observe(Date.now() - start);
+  });
+  next();
+});
 
 import authRoutes from "./routes/authRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
@@ -26,6 +47,16 @@ app.use("/api/users", userRoutes);
 
 app.get("/health", (req, res) => {
   res.status(200).json({ status: "ok", service: "auth-service" });
+});
+
+// Expose Prometheus metrics
+app.get("/metrics", async (req, res) => {
+  try {
+    res.set("Content-Type", client.register.contentType);
+    res.end(await client.register.metrics());
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
 });
 
 // Error handling middleware

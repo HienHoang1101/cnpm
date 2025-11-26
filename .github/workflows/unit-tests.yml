@@ -1,0 +1,71 @@
+name: Unit Tests (per-service)
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+    branches:
+      - "**"
+
+jobs:
+  unit-tests:
+    name: Unit tests — ${{ matrix.service }}
+    runs-on: ubuntu-latest
+      strategy:
+        fail-fast: false
+        matrix:
+          service:
+            - auth
+            - payment-service
+            - order
+            - admin-service
+            - restaurant
+            - notification-service
+            - food-delivery-server
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Cache node_modules per-service
+        uses: actions/cache@v4
+        with:
+          path: ${{ matrix.service }}/node_modules
+          # Build a stable cache key per service. Use format() to build the path for hashFiles()
+          key: ${{ join('-', ['npm', matrix.service, hashFiles(format('{0}/package-lock.json', matrix.service))]) }}
+          restore-keys: |
+            npm-${{ matrix.service }}-
+
+      - name: Install dependencies
+        working-directory: ${{ matrix.service }}
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm install --no-audit --no-fund; fi
+
+      - name: Run unit tests (prefer `test:unit`)
+        id: run-tests
+        working-directory: ${{ matrix.service }}
+        run: |
+          echo "Running tests in: $PWD"
+          if grep -q '"test:unit"' package.json; then
+            echo "Using test:unit script"
+            npm run test:unit
+          else
+            echo "Using test script"
+            npm test
+          fi
+
+      - name: Upload test logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.service }}-test-log
+          path: |
+            ${{ matrix.service }}/npm-debug.log
+            ${{ matrix.service }}/jest*.log
+            ${{ matrix.service }}/test-output.txt

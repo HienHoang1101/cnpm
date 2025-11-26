@@ -1,0 +1,57 @@
+---
+groups:
+  - name: fastfood_alerts
+    rules:
+      - alert: ServiceDown
+        expr: up{job=~".*-service"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          project: "fastfood_delivery"
+        annotations:
+          summary: "Service {{ $labels.job }} is DOWN"
+          description: "Prometheus target up=0 for more than 1 minute"
+
+      - alert: High5xxErrorRate
+        expr: |
+          100 * (
+            sum by (service) (rate(http_request_duration_ms_count{project="fastfood_delivery", status_code=~"5.."}[5m]))
+            /
+            sum by (service) (rate(http_request_duration_ms_count{project="fastfood_delivery"}[5m]))
+          )
+        for: 5m
+        labels:
+          severity: warning
+          project: "fastfood_delivery"
+        annotations:
+          summary: "High 5xx error rate on {{ $labels.service }}"
+          description: "5xx error rate > 5% for last 5 minutes"
+
+      - alert: HighP95Latency
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (service, le) (
+              rate(http_request_duration_ms_bucket{project="fastfood_delivery"}[5m])
+            )
+          ) > 1000
+        for: 5m
+        labels:
+          severity: warning
+          project: "fastfood_delivery"
+        annotations:
+          summary: "High latency (P95) on {{ $labels.service }}"
+          description: "P95 latency > 1s for last 5 minutes"
+
+      - alert: MissingMetrics
+        expr: |
+          (
+            up == 0
+          ) or absent(http_request_duration_ms_count{project="fastfood_delivery"})
+        for: 2m
+        labels:
+          severity: critical
+          project: "fastfood_delivery"
+        annotations:
+          summary: "Metrics missing or target down ({{ $labels.job }})"
+          description: "Target is down or not exposing Prometheus metrics for project fastfood_delivery; check /metrics endpoint or scraping configuration"

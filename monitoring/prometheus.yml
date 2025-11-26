@@ -1,0 +1,102 @@
+global:
+  scrape_interval: 5s
+
+rule_files:
+  - "prometheus_rules.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+
+scrape_configs:
+  - job_name: "auth-service"
+    static_configs:
+      - targets: ["auth-service:5001"]
+        labels:
+          project: "fastfood_delivery"
+          service: "auth"
+
+  - job_name: "order-service"
+    static_configs:
+      - targets: ["order-service:5002"]
+        labels:
+          project: "fastfood_delivery"
+          service: "order"
+
+  - job_name: "delivery-service"
+    static_configs:
+      - targets: ["delivery-service:5004"]
+        labels:
+          project: "fastfood_delivery"
+          service: "delivery"
+
+  - job_name: "payment-service"
+    static_configs:
+      - targets: ["payment-service:5005"]
+        labels:
+          project: "fastfood_delivery"
+          service: "payment"
+
+  - job_name: "admin-service"
+    static_configs:
+      - targets: ["admin-service:5008"]
+        labels:
+          project: "fastfood_delivery"
+          service: "admin"
+
+  - job_name: "notification-service"
+    static_configs:
+      - targets: ["notification-service:5007"]
+        labels:
+          project: "fastfood_delivery"
+          service: "notification"
+
+  - job_name: "restaurant-service"
+    static_configs:
+      - targets: ["restaurant:5006"]
+        labels:
+          project: "fastfood_delivery"
+          service: "restaurant"
+
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["prometheus:9090"]
+        labels:
+          project: "fastfood_delivery"
+          service: "prometheus"
+
+  - job_name: "grafana"
+    static_configs:
+      - targets: ["grafana:3000"]
+        labels:
+          project: "fastfood_delivery"
+          service: "grafana"
+
+  - job_name: "alertmanager"
+    static_configs:
+      - targets: ["alertmanager:9093"]
+        labels:
+          project: "fastfood_delivery"
+          service: "alertmanager"
+
+  - job_name: 'blackbox-http'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+          - http://auth-service:5001/health
+          - http://order-service:5002/health
+          - http://delivery-service:5004/health
+          - http://payment-service:5005/health
+          - http://admin-service:5008/health
+          - http://notification-service:5007/health
+          - http://restaurant:5006/health
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+      - source_labels: [__param_target]
+        target_label: instance

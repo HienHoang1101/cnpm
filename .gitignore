@@ -75,7 +75,7 @@ docker-compose.override.yml
 ### CI ###
 .circleci/
 .travis.yml
-.gitlab-ci.yml
+
 
 
 **/node_modules

@@ -1,0 +1,50 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "panels": [
+    {
+      "datasource": "Prometheus",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "id": 1,
+      "targets": [
+        {"expr": "histogram_quantile(0.95, sum by (job, le) (rate(http_request_duration_ms_bucket{job=~\".*order.*\"}[5m])))", "legendFormat": "{{job}}", "refId": "A"}
+      ],
+      "title": "Order Service P95 Latency (ms)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "id": 2,
+      "targets": [
+        {"expr": "sum by (job) (rate(http_request_duration_ms_count{job=~\".*order.*\"}[1m]))", "legendFormat": "{{job}}", "refId": "A"}
+      ],
+      "title": "Order Request Rate (req/s)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "id": 3,
+      "targets": [
+        {"expr": "sum by (job) (rate(process_cpu_user_seconds_total{job=~\".*order.*\"}[1m]) + rate(process_cpu_system_seconds_total{job=~\".*order.*\"}[1m]))", "legendFormat": "{{job}}", "refId": "A"}
+      ],
+      "title": "Order Process CPU (cores)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "id": 4,
+      "targets": [
+        {"expr": "sum by (job) (process_resident_memory_bytes{job=~\".*order.*\"})", "legendFormat": "{{job}}", "refId": "A"}
+      ],
+      "title": "Order Memory (bytes)",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "15s",
+  "title": "Order Service - Overview",
+  "uid": "order-service-overview",
+  "version": 1
+}
