@@ -11,8 +11,8 @@ RUN npm install --production
 # Copy application code
 COPY . .
 
-# Expose the port the app runs on
-EXPOSE 5008
+# Expose the port the app runs on (container port should match docker-compose mapping)
+EXPOSE 5007
 
 # Command to run the application
 CMD ["node", "index.js"] 

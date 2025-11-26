@@ -19,4 +19,24 @@ scrape_configs:
     static_configs:
       - targets: ['notification-service:5007']
       
+  - job_name: 'payment-service'
+    static_configs:
+      - targets: ['payment-service:5004']
+
+  - job_name: 'auth-service'
+    static_configs:
+      - targets: ['auth-service:5001']
+
+  - job_name: 'delivery-service'
+    static_configs:
+      - targets: ['delivery-service:5004']
+
+  - job_name: 'admin-service'
+    static_configs:
+      - targets: ['admin-service:5008']
+
+  - job_name: 'restaurant-service'
+    static_configs:
+      - targets: ['restaurant:5006']
+
   # Thêm các service khác (payment, auth...) tương tự khi bạn đã gắn code metrics
