@@ -4,6 +4,21 @@
   "schemaVersion": 30,
   "version": 1,
   "refresh": "10s",
+  "templating": {
+    "list": [
+      {
+        "type": "query",
+        "name": "service",
+        "label": "Service",
+        "datasource": "Prometheus",
+        "query": "label_values(job)",
+        "includeAll": true,
+        "multi": true,
+        "allValue": ".*",
+        "refresh": 1
+      }
+    ]
+  },
   "panels": [
     {
       "type": "stat",
@@ -52,6 +67,34 @@
         { "expr": "sum by (job)(rate(http_request_duration_seconds_count{code=~\"5..\"}[5m]))", "refId": "A" }
       ],
       "fieldConfig": { "defaults": { "unit": "req/s", "decimals": 2, "min": 0 } }
+    },
+    {
+      "type": "timeseries",
+      "title": "P95 Latency by Service (ms)",
+      "id": 5,
+      "datasource": "Prometheus",
+      "gridPos": { "x": 0, "y": 22, "w": 16, "h": 8 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, job) (rate(http_request_duration_seconds_bucket[5m])))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ms", "decimals": 2, "min": 0 } }
+    },
+    {
+      "type": "logs",
+      "title": "Logs (Loki) - filter by Service",
+      "id": 6,
+      "datasource": "Loki",
+      "gridPos": { "x": 0, "y": 30, "w": 16, "h": 10 },
+      "targets": [
+        {
+          "expr": "{job=~\"$service\"}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": {}, "overrides": [] }
     }
   ],
   "timezone": "browser",
