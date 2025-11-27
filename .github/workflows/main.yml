@@ -165,7 +165,7 @@ jobs:
   docker-build-push:
     name: Build and push images
     runs-on: ubuntu-latest
-    needs: [lint, unit-tests, integration-tests, security-scan]
+    needs: [lint, unit-tests, integration-tests, security-scan, monitoring-tests]
     env:
       TAG_BASE: ${{ secrets.DOCKER_REGISTRY }}/${{ secrets.DOCKER_USERNAME }}
     steps:
@@ -228,6 +228,116 @@ jobs:
           context: ./notification-service
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/food-notification-service:latest
+
+  monitoring-tests:
+    name: Monitoring tests (metrics endpoints)
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests, security-scan]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: payment-service
+            path: payment-service
+          - name: order
+            path: order
+          - name: restaurant
+            path: restaurant
+          - name: notification-service
+            path: notification-service
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Install dependencies
+        working-directory: ${{ matrix.path }}
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+      - name: Run metrics tests (if present)
+        working-directory: ${{ matrix.path }}
+        run: |
+          if node - <<'NODE'
+            try {
+              const p = require('./package.json');
+              if (p.devDependencies && (p.devDependencies.jest || p.devDependencies['supertest'])) process.exit(0);
+            } catch (e) {}
+            process.exit(1);
+          NODE
+          then
+            npm test --silent || (cat "no-tests-or-failed" && exit 1)
+          else
+            echo "No monitoring tests for ${{ matrix.name }}, skipping."
+          fi
+
+  monitoring-provisioning-check:
+    name: Monitoring provisioning smoke test
+    runs-on: ubuntu-latest
+    needs: [monitoring-tests]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Docker
+        uses: docker/setup-buildx-action@v3
+      - name: Create network
+        run: |
+          docker network create monitoring-ci || true
+      - name: Start Prometheus (CI)
+        run: |
+          # Use the CI prometheus config which includes the test-exporter job
+          docker run -d --rm --name prometheus-ci --network monitoring-ci \
+            -v ${{ github.workspace }}/monitoring/prometheus/prometheus-ci.yml:/etc/prometheus/prometheus.yml:ro \
+            -v ${{ github.workspace }}/monitoring/prometheus/rules:/etc/prometheus/rules:ro \
+            -p 9090:9090 prom/prometheus:latest
+      - name: Start Grafana (CI)
+        run: |
+          docker run -d --rm --name grafana-ci --network monitoring-ci \
+            -e GF_SECURITY_ADMIN_PASSWORD=admin \
+            -v ${{ github.workspace }}/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro \
+            -v ${{ github.workspace }}/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro \
+            -p 3000:3000 grafana/grafana:latest
+      - name: Start test exporter (simple HTTP metrics)
+        run: |
+          # Start a tiny Python-based metrics endpoint that exposes `sample_test_metric` on /metrics
+          docker run -d --rm --name test-exporter --network monitoring-ci -p 9101:9101 python:3.9-slim \
+            sh -c "cat > /tmp/server.py <<'PY'\nfrom http.server import BaseHTTPRequestHandler,HTTPServer\nclass H(BaseHTTPRequestHandler):\n    def do_GET(self):\n        if self.path == '/metrics':\n            self.send_response(200)\n            self.send_header('Content-Type','text/plain; version=0.0.4; charset=utf-8')\n            self.end_headers()\n            self.wfile.write(b'sample_test_metric 123\\n')\n        else:\n            self.send_response(404)\n            self.end_headers()\n\nif __name__ == '__main__':\n    HTTPServer(('0.0.0.0', 9101), H).serve_forever()\nPY\npython /tmp/server.py"
+      - name: Wait for Prometheus to scrape test-exporter
+        run: |
+          # wait up to 30s for Prometheus to observe sample_test_metric
+          for i in {1..30}; do
+            sleep 1
+            resp=$(curl -s 'http://localhost:9090/api/v1/query?query=sample_test_metric') || true
+            echo "$resp" | grep -q 'sample_test_metric' && echo 'scraped' && exit 0 || true
+          done
+          echo 'Prometheus did not scrape sample_test_metric in time' && exit 1
+      - name: Wait for Grafana
+        run: |
+          for i in {1..30}; do
+            status=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/api/health || true)
+            if [ "$status" = "200" ]; then echo grafana-up && break; fi
+            sleep 1
+          done
+      - name: Verify dashboard provisioning
+        run: |
+          set -e
+          echo "Checking Grafana dashboard UIDs"
+          curl -s -u admin:admin http://localhost:3000/api/dashboards/uid/microservices-basic | jq -e '.meta.uid=="microservices-basic"' >/dev/null
+          curl -s -u admin:admin http://localhost:3000/api/dashboards/uid/order-service | jq -e '.meta.uid=="order-service"' >/dev/null
+          curl -s -u admin:admin http://localhost:3000/api/dashboards/uid/payment-service | jq -e '.meta.uid=="payment-service"' >/dev/null
+          curl -s -u admin:admin http://localhost:3000/api/dashboards/uid/notification-service | jq -e '.meta.uid=="notification-service"' >/dev/null
+          curl -s -u admin:admin http://localhost:3000/api/dashboards/uid/restaurant-service | jq -e '.meta.uid=="restaurant-service"' >/dev/null
+      - name: Verify Prometheus rules loaded
+        run: |
+          curl -s http://localhost:9090/api/v1/rules | jq -e '.data.groups[] | select(.name=="service_alerts")' >/dev/null
+      - name: Teardown
+        if: always()
+        run: |
+          docker rm -f grafana-ci prometheus-ci || true
+          docker network rm monitoring-ci || true
 
   deploy:
     name: Deploy to cluster

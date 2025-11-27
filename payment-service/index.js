@@ -3,6 +3,7 @@ import cors from "cors";
 import express from "express";
 import mongoose from "mongoose";
 import paymentRoutes from "./routes/paymentRoutes.js";
+import client from "prom-client";
 
 dotenv.config({ path: "../.env" }); // 👈 thêm dòng này
 console.log("🔑 Stripe secret:", process.env.STRIPE_WEBHOOK_SECRET);
@@ -53,8 +54,12 @@ mongoose
 // Routes
 app.use("/api/payment", paymentRoutes);
 
-// Start Server
+// Start Server (skip in test environment)
 const PORT = process.env.PORT || 5004;
-app.listen(PORT, () => {
-  console.log(`Payment service running on port ${PORT}`);
-});
+if (process.env.NODE_ENV !== "test") {
+  app.listen(PORT, () => {
+    console.log(`Payment service running on port ${PORT}`);
+  });
+}
+
+export default app;

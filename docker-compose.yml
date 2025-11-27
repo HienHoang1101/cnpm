@@ -196,6 +196,12 @@ services:
       - ./monitoring/alertmanager/config.yml:/etc/alertmanager/config.yml:ro
     command: --config.file=/etc/alertmanager/config.yml
     restart: unless-stopped
-
+  pushgateway:
+    image: prom/pushgateway
+    container_name: pushgateway
+    ports:
+      - "9091:9091"
+    restart: unless-stopped
+    
 volumes:
   mongo_data:

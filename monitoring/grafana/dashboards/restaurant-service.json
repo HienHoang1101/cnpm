@@ -1,0 +1,58 @@
+{
+  "title": "Restaurant Service",
+  "uid": "restaurant-service",
+  "schemaVersion": 16,
+  "version": 1,
+  "panels": [
+    {
+      "type": "graph",
+      "title": "Restaurant - Request Rate (1m)",
+      "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+      "targets": [
+        {"expr": "rate(http_request_duration_seconds_count{job=\"restaurant-service\"}[1m])", "legendFormat": "{{instance}}"}
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Restaurant - Error Rate (5m)",
+      "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+      "targets": [
+        {"expr": "(sum(rate(http_requests_total{job=\"restaurant-service\",status=~\"5..\"}[5m])))/(sum(rate(http_requests_total{job=\"restaurant-service\"}[5m]))+1e-9))", "legendFormat": "error-rate"}
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Restaurant - P95 Latency (ms)",
+      "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+      "targets": [
+        {"expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=\"restaurant-service\"}[5m])) by (le)) * 1000", "legendFormat": "p95"}
+      ]
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "type": "query",
+        "name": "endpoint",
+        "label": "Endpoint",
+        "datasource": "Prometheus",
+        "query": "label_values(http_requests_total, handler)",
+        "multi": false,
+        "includeAll": true
+      }
+    ]
+  },
+  "annotations": {
+    "list": [
+      {
+        "name": "Service Alerts",
+        "datasource": "Prometheus",
+        "iconColor": "#ff0000",
+        "enable": true,
+        "expr": "ALERTS{job=\"restaurant-service\",severity=\"critical\"}",
+        "source": "prometheus"
+      }
+    ]
+  },
+  "time": {"from": "now-1h", "to": "now"}
+}

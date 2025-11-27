@@ -1,27 +1,9 @@
 {
   "id": null,
-  "uid": "node-exporter-simple",
-  "title": "Node Exporter - Simple",
+  "uid": "node-exporter-simple-alt",
+  "title": "Node Exporter - Simple (alt)",
   "schemaVersion": 27,
   "version": 1,
   "refresh": "5s",
-  "panels": [
-    {
-      "type": "timeseries",
-      "title": "CPU (non-idle) (per second)",
-      "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
-      "targets": [
-        {"expr": "sum by(instance) (rate(node_cpu_seconds_total{mode!~\"idle|iowait\",job=\"node-exporter\"}[5m]))", "refId": "A"}
-      ]
-    },
-    {
-      "type": "timeseries",
-      "title": "Memory Used (%)",
-      "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
-      "targets": [
-        {"expr": "(1 - (node_memory_MemAvailable_bytes{job=\"node-exporter\"} / node_memory_MemTotal_bytes{job=\"node-exporter\"})) * 100", "refId": "A"}
-      ]
-    }
-  ],
-  "timezone": "browser"
+  "panels": []
 }

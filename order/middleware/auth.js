@@ -146,3 +146,15 @@ const validateWithAuthService = async (req, res, next) => {
 };
 
 export { protect, authorize, validateWithAuthService };
+
+// Generic error handler for compatibility with app import
+const errorHandler = (err, req, res, next) => {
+  console.error(err);
+  const status = err && err.status ? err.status : 500;
+  res.status(status).json({
+    success: false,
+    message: err && err.message ? err.message : "Server Error",
+  });
+};
+
+export { errorHandler };

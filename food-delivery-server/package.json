@@ -6,8 +6,8 @@
   "scripts": {
     "start": "node app.js",
     "dev": "nodemon app.js",
-    "test": "node -e \"console.log('food-delivery-server: placeholder unit tests');\"",
-    "test:integration": "node -e \"console.log('food-delivery-server: placeholder integration tests');\""
+    "test": "node --test",
+    "test:integration": "node --test"
   },
   "keywords": [],
   "author": "",
