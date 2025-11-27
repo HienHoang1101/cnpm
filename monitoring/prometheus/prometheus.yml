@@ -50,3 +50,4 @@ alerting:
 # Rule files (drop-in alerting rules)
 rule_files:
   - 'rules/test_alerts.yml'
+  - 'rules/service-rules.yml'
