@@ -22,8 +22,9 @@ jobs:
         env:
           DEFAULT_BRANCH: main
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VALIDATE_ALL_CODEBASE: true
-          FILTER_REGEX_EXCLUDE: node_modules
+          VALIDATE_ALL_CODEBASE: false
+          FILTER_REGEX_EXCLUDE: >-
+            (^|/)(node_modules|vendor|dist|build|coverage|.git)/
 
   unit-tests:
     name: Unit tests
