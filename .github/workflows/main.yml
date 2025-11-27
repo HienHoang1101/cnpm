@@ -152,7 +152,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [lint, unit-tests, integration-tests, security-scan]
     env:
-      IMAGE_BASE_PREFIX: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}
+      REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
+      REGISTRY_USER: ${{ secrets.DOCKER_USERNAME }}
     strategy:
       fail-fast: false
       matrix:
@@ -174,12 +175,15 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ env.IMAGE_NAMESPACE }}
+          username: ${{ env.REGISTRY_USER }}
           password: ${{ secrets.DOCKER_PASSWORD }}
       - name: Build and push image
         uses: docker/build-push-action@v5
         env:
-          IMAGE_BASE: ${{ env.IMAGE_BASE_PREFIX }}/${{ matrix.service }}
+          R: ${{ env.REGISTRY }}
+          U: ${{ env.REGISTRY_USER }}
+          SVC: ${{ matrix.service }}
+          IMAGE_BASE: ${{ env.R }}/${{ env.U }}/${{ env.SVC }}
         with:
           context: ${{ matrix.service }}
           push: true
