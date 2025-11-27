@@ -21,3 +21,4 @@ export default function () {
   http.get('http://localhost:52358/metrics');
   sleep(1);
 }
+/////
