@@ -202,9 +202,19 @@ jobs:
         with:
           version: v1.28.0
       - name: Configure kubeconfig
+        env:
+          KUBE_CONFIG_CONTENT: ${{ secrets.KUBE_CONFIG }}
         run: |
           mkdir -p ~/.kube
-          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > ~/.kube/config
+          tmp="$(mktemp)"
+          # Try base64 decode; if it fails, assume plain kubeconfig.
+          set +e
+          echo "$KUBE_CONFIG_CONTENT" | base64 -d > "$tmp" 2>/dev/null
+          if [ $? -ne 0 ]; then
+            echo "$KUBE_CONFIG_CONTENT" > "$tmp"
+          fi
+          set -e
+          mv "$tmp" ~/.kube/config
       - name: Deploy with kustomize overlays
         run: |
           kubectl apply -k kubernetes
