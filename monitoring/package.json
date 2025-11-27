@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "test": "jest --runInBand --reporters=default"
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --reporters=default"
   },
   "devDependencies": {
     "jest": "^29.0.0"
