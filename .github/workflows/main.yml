@@ -194,6 +194,8 @@ jobs:
     name: Deploy to cluster
     runs-on: ubuntu-latest
     needs: docker-build-push
+    env:
+      DEPLOY_ENABLED: ${{ secrets.DEPLOY_ENABLED }}
     if: >-
       github.event_name == 'push' &&
       github.ref == 'refs/heads/main'
@@ -204,7 +206,7 @@ jobs:
         with:
           version: v1.28.0
       - name: Configure kubeconfig
-        if: ${{ secrets.DEPLOY_ENABLED == 'true' }}
+        if: env.DEPLOY_ENABLED == 'true'
         env:
           KUBE_CONFIG_CONTENT: ${{ secrets.KUBE_CONFIG }}
         run: |
@@ -230,7 +232,7 @@ jobs:
           fi
           mv "$tmp" ~/.kube/config
       - name: Deploy with kustomize overlays
-        if: ${{ secrets.DEPLOY_ENABLED == 'true' }}
+        if: env.DEPLOY_ENABLED == 'true'
         run: |
           kubectl apply -k kubernetes
 
