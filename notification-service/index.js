@@ -4,7 +4,7 @@ import cors from "cors";
 import connectDB from "./config/db.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
 import { startRegistrationConsumer } from "./consumers/notificationConsumer.js";
-import client from "prom-client";
+import { collectDefaults, createHttpMetrics, register } from "../monitoring/metrics/metrics.js";
 
 // Load environment variables
 dotenv.config();
@@ -15,24 +15,10 @@ const app = express();
 connectDB();
 
 /* ==== Metrics (Prometheus) ==== */
-client.collectDefaultMetrics();
-
-const httpRequestDuration = new client.Histogram({
-  name: "http_request_duration_ms",
-  help: "Thời gian xử lý HTTP request",
-  labelNames: ["method", "route", "status_code"],
-  buckets: [50, 100, 200, 500, 1000, 2000],
-});
-
-app.use((req, res, next) => {
-  const start = Date.now();
-  res.on("finish", () => {
-    httpRequestDuration
-      .labels(req.method, req.route?.path || req.path, res.statusCode)
-      .observe(Date.now() - start);
-  });
-  next();
-});
+// Use standardized metrics in seconds
+collectDefaults();
+const { middleware: metricsMiddleware } = createHttpMetrics("notification-service");
+app.use(metricsMiddleware);
 
 // Middleware
 app.use(express.json());
@@ -69,8 +55,8 @@ app.listen(PORT, () => {
 // Expose Prometheus metrics
 app.get("/metrics", async (req, res) => {
   try {
-    res.set("Content-Type", client.register.contentType);
-    res.end(await client.register.metrics());
+    res.set("Content-Type", register.contentType);
+    res.end(await register.metrics());
   } catch (err) {
     res.status(500).send(err.message);
   }
