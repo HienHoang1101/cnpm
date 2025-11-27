@@ -6,8 +6,10 @@
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --reporters=default",
     "test:integration": "node -e \"console.log('monitoring: placeholder integration tests');\""
   },
-  "devDependencies": {
-    "jest": "^29.0.0",
+  "dependencies": {
     "prom-client": "^15.1.3"
+  },
+  "devDependencies": {
+    "jest": "^29.0.0"
   }
 }

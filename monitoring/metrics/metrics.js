@@ -1,4 +1,27 @@
-import client from 'prom-client';
+import { createRequire } from 'module';
+
+// Try to resolve prom-client from the npm invocation directory (INIT_CWD) or current working directory first
+// so services can keep the dependency local, then fall back to module-local resolution.
+function loadPromClient() {
+  const bases = [process.env.INIT_CWD, process.cwd(), import.meta.url];
+  let lastError = null;
+
+  for (const base of bases) {
+    if (!base) continue;
+    const normalized = typeof base === 'string' && !base.endsWith('/') && !base.endsWith('\\') ? `${base}/` : base;
+    try {
+      const req = createRequire(normalized);
+      const mod = req('prom-client');
+      return mod.default ?? mod;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+
+  throw lastError;
+}
+
+const client = loadPromClient();
 
 // Centralized metrics helper for all services in the monorepo.
 // This file ensures default metrics are only collected once per process
