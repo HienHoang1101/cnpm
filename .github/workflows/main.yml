@@ -18,7 +18,12 @@ jobs:
           node-version: '18'
       - name: Install monitoring deps
         working-directory: monitoring
-        run: npm ci
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
       - name: Run monitoring tests
         working-directory: monitoring
         run: npm test
@@ -33,7 +38,12 @@ jobs:
           node-version: '18'
       - name: Install order deps
         working-directory: order
-        run: npm ci
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
       - name: Run order unit tests
         working-directory: order
         run: npm test
@@ -48,7 +58,12 @@ jobs:
           node-version: '18'
       - name: Install auth deps
         working-directory: auth
-        run: npm ci
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
       - name: Run auth unit tests
         working-directory: auth
         run: npm test
@@ -63,7 +78,12 @@ jobs:
           node-version: '18'
       - name: Install admin deps
         working-directory: admin-service
-        run: npm ci
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
       - name: Run admin tests
         working-directory: admin-service
         run: npm test
@@ -78,7 +98,12 @@ jobs:
           node-version: '18'
       - name: Install payment deps
         working-directory: payment-service
-        run: npm ci
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
       - name: Run payment tests (skip if none)
         run: |
           node -e "process.exit(require('./payment-service/package.json').scripts && require('./payment-service/package.json').scripts.test ? 0 : 2)"
@@ -99,7 +124,12 @@ jobs:
           node-version: '18'
       - name: Install notification deps
         working-directory: notification-service
-        run: npm ci
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
       - name: Run notification tests
         working-directory: notification-service
         run: npm test
@@ -114,7 +144,12 @@ jobs:
           node-version: '18'
       - name: Install restaurant deps
         working-directory: restaurant
-        run: npm ci
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
       - name: Run restaurant tests (may fail if none)
         working-directory: restaurant
         run: npm test || echo "restaurant tests exited non-zero"
@@ -130,7 +165,12 @@ jobs:
           node-version: '18'
       - name: Install delivery deps
         working-directory: food-delivery-server
-        run: npm ci
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
       - name: Run delivery tests (may be placeholder)
         working-directory: food-delivery-server
         run: npm test || echo "delivery tests exited non-zero"
