@@ -2,6 +2,37 @@ global:
   resolve_timeout: 5m
 
 route:
+  receiver: 'default-receiver'
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 3h
+
+receivers:
+  - name: 'default-receiver'
+    # Default: send to a webhook (placeholder). Replace with a real receiver below.
+    webhook_configs:
+      - url: 'http://example.com/alert' # replace with your webhook endpoint or alert sink
+
+  # Example Slack receiver (commented):
+  # - name: 'slack-notifications'
+  #   slack_configs:
+  #     - api_url: '${{ SLACK_WEBHOOK_URL }}'
+  #       channel: '#alerts'
+
+  # Example Telegram receiver (commented):
+  # - name: 'telegram-notifications'
+  #   telegram_configs:
+  #     - bot_token: '${{ TELEGRAM_TOKEN }}'
+  #       chat_id: '${{ TELEGRAM_CHAT_ID }}'
+
+inhibit_rules: []
+
+# NOTE:
+# - Replace 'http://example.com/alert' with a real webhook or email/slack/telegram receiver.
+# - For email use `email_configs` with SMTP server credentials.global:
+  resolve_timeout: 5m
+
+route:
   receiver: 'default'
   group_wait: 30s
   group_interval: 5m
