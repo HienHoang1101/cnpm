@@ -18,20 +18,38 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5004;
 
-// --- MONITORING: Prometheus client setup (CommonJS) ---
+// --- MONITORING: Add service label and counters for compatibility with shared metrics
 client.collectDefaultMetrics();
 
 const httpRequestDuration = new client.Histogram({
   name: 'http_request_duration_seconds',
   help: 'Duration of HTTP requests in seconds',
-  labelNames: ['method', 'route', 'code'],
+  labelNames: ['service', 'method', 'route', 'code'],
   buckets: [0.1, 0.3, 0.5, 1, 3, 5]
+});
+
+const httpRequestsTotal = new client.Counter({
+  name: 'http_requests_total',
+  help: 'Total HTTP requests',
+  labelNames: ['service', 'method', 'route', 'code']
+});
+
+const httpErrorsTotal = new client.Counter({
+  name: 'http_errors_total',
+  help: 'Total HTTP errors',
+  labelNames: ['service', 'method', 'route', 'code']
 });
 
 app.use((req, res, next) => {
   const end = httpRequestDuration.startTimer();
   res.on('finish', () => {
-    end({ method: req.method, route: req.route ? req.route.path : req.path, code: res.statusCode });
+    const route = req.route ? req.route.path : req.path;
+    const labels = { service: 'delivery-service', method: req.method, route, code: res.statusCode };
+    try { end(labels); } catch (e) {}
+    try { httpRequestsTotal.labels('delivery-service', req.method, route, res.statusCode).inc(); } catch (e) {}
+    if (res.statusCode >= 400) {
+      try { httpErrorsTotal.labels('delivery-service', req.method, route, res.statusCode).inc(); } catch (e) {}
+    }
   });
   next();
 });
