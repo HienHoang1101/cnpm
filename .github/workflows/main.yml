@@ -72,6 +72,11 @@ jobs:
             process.exit(1);
           NODE
           then
+            # if this matrix entry is payment-service set a dummy stripe key for tests
+            if [ "${{ matrix.name }}" = "payment-service" ]; then
+              export STRIPE_SECRET_KEY=sk_test_dummy
+              echo "Set STRIPE_SECRET_KEY for payment-service tests"
+            fi
             npm test
           else
             echo "No test script for ${{ matrix.name }}, skipping."
@@ -160,6 +165,8 @@ jobs:
         working-directory: ./payment-service
         run: |
           if [ -f package-lock.json ]; then npm ci; else npm install; fi
+          # supply a test stripe key so Stripe client constructs during tests
+          export STRIPE_SECRET_KEY=sk_test_dummy
           npm test
 
   docker-build-push:
