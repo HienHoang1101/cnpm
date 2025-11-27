@@ -1,253 +1,237 @@
-name: CI Pipeline
+---
+name: CI/CD Pipeline
 
-on:
+'on':
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
+
+env:
+  REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
+  IMAGE_NAMESPACE: ${{ secrets.DOCKER_USERNAME }}
 
 jobs:
-  # Unit / monitoring test jobs
-  monitoring-tests:
+  lint:
+    name: Lint (Super-Linter)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-      - name: Install monitoring deps
-        working-directory: monitoring
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            npm install
-          fi
-      - name: Run monitoring tests
-        working-directory: monitoring
-        run: npm test
-
-  order-tests:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-      - name: Install order deps
-        working-directory: order
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            npm install
-          fi
-      - name: Run order unit tests
-        working-directory: order
-        run: npm test
-
-  auth-tests:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-      - name: Install auth deps
-        working-directory: auth
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            npm install
-          fi
-      - name: Run auth unit tests
-        working-directory: auth
-        run: npm test
-
-  admin-tests:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-      - name: Install admin deps
-        working-directory: admin-service
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            npm install
-          fi
-      - name: Run admin tests
-        working-directory: admin-service
-        run: npm test
-
-  payment-tests:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-      - name: Install payment deps
-        working-directory: payment-service
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            npm install
-          fi
-      - name: Run payment tests (skip if none)
-        run: |
-          if node -e "process.exit(require('./payment-service/package.json').scripts && require('./payment-service/package.json').scripts.test ? 0 : 1)"; then
-            echo "payment-service has test script — running tests"
-            cd payment-service
-            npm test
-          else
-            echo "No test script for payment-service, skipping"
-          fi
-
-  notification-tests:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-      - name: Install notification deps
-        working-directory: notification-service
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            npm install
-          fi
-      - name: Run notification tests
-        working-directory: notification-service
-        run: npm test
-
-  restaurant-tests:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-      - name: Install restaurant deps
-        working-directory: restaurant
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            npm install
-          fi
-      - name: Run restaurant tests (may fail if none)
-        working-directory: restaurant
-        run: npm test || echo "restaurant tests exited non-zero"
-
-  delivery-tests:
-    name: Delivery (food-delivery-server) tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-      - name: Install delivery deps
-        working-directory: food-delivery-server
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            npm install
-          fi
-      - name: Run delivery tests (may be placeholder)
-        working-directory: food-delivery-server
-        run: npm test || echo "delivery tests exited non-zero"
-
-  # YAML lint job
-  yaml-lint:
-    name: YAML Lint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Run Super-Linter (YAML only)
+      - name: Run Super-Linter
         uses: github/super-linter@v4
         env:
-          VALIDATE_YAML: true
           DEFAULT_BRANCH: main
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          FILTER_REGEX_EXCLUDE: 'node_modules|.github/workflows'
+          VALIDATE_ALL_CODEBASE: true
+          FILTER_REGEX_EXCLUDE: node_modules
 
-  # Docker build & push matrix — only runs after lint and tests
-  docker-build-push:
-    name: Build and Push Docker images
+  unit-tests:
+    name: Unit tests
     runs-on: ubuntu-latest
-    needs: [ monitoring-tests, order-tests, auth-tests, admin-tests, payment-tests, notification-tests, restaurant-tests, delivery-tests, yaml-lint ]
     strategy:
+      fail-fast: false
       matrix:
-        service: [ auth, admin-service, payment-service, notification-service, restaurant, food-delivery-server, order ]
+        include:
+          - name: monitoring
+            path: monitoring
+          - name: order
+            path: order
+          - name: auth
+            path: auth
+          - name: admin-service
+            path: admin-service
+          - name: payment-service
+            path: payment-service
+          - name: notification-service
+            path: notification-service
+          - name: restaurant
+            path: restaurant
+          - name: food-delivery-server
+            path: food-delivery-server
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: npm
+          cache-dependency-path: ${{ matrix.path }}/package-lock.json
+      - name: Install dependencies
+        working-directory: ${{ matrix.path }}
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+      - name: Run unit tests (skip if missing)
+        working-directory: ${{ matrix.path }}
+        run: |
+          if node - <<'NODE'
+            const p = require('./package.json');
+            if (p.scripts && p.scripts.test) process.exit(0);
+            process.exit(1);
+          NODE
+          then
+            npm test
+          else
+            echo "No test script for ${{ matrix.name }}, skipping."
+          fi
+
+  integration-tests:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: monitoring
+            path: monitoring
+          - name: order
+            path: order
+          - name: auth
+            path: auth
+          - name: admin-service
+            path: admin-service
+          - name: payment-service
+            path: payment-service
+          - name: notification-service
+            path: notification-service
+          - name: restaurant
+            path: restaurant
+          - name: food-delivery-server
+            path: food-delivery-server
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: npm
+          cache-dependency-path: ${{ matrix.path }}/package-lock.json
+      - name: Install dependencies
+        working-directory: ${{ matrix.path }}
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+      - name: Run integration tests (skip if missing)
+        working-directory: ${{ matrix.path }}
+        run: |
+          if node - <<'NODE'
+            const p = require('./package.json');
+            if (p.scripts && p.scripts['test:integration']) process.exit(0);
+            process.exit(1);
+          NODE
+          then
+            npm run test:integration
+          else
+            echo "No integration test script for ${{ matrix.name }}, skipping."
+          fi
+
+  security-scan:
+    name: Security scan (Trivy)
+    runs-on: ubuntu-latest
+    needs: [lint, unit-tests]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Trivy FS scan
+        uses: aquasecurity/trivy-action@v0.20.0
+        with:
+          scan-type: fs
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+          format: table
+
+  docker-build-push:
+    name: Build and push images
+    runs-on: ubuntu-latest
+    needs: [lint, unit-tests, integration-tests, security-scan]
+    env:
+      IMAGE_BASE_PREFIX: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - auth
+          - admin-service
+          - payment-service
+          - notification-service
+          - restaurant
+          - food-delivery-server
+          - order
     steps:
       - uses: actions/checkout@v4
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
+        uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
       - name: Login to registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
-          registry: ${{ secrets.DOCKER_REGISTRY }}
-          username: ${{ secrets.DOCKER_USERNAME }}
+          registry: ${{ env.REGISTRY }}
+          username: ${{ env.IMAGE_NAMESPACE }}
           password: ${{ secrets.DOCKER_PASSWORD }}
       - name: Build and push image
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v5
+        env:
+          IMAGE_BASE: ${{ env.IMAGE_BASE_PREFIX }}/${{ matrix.service }}
         with:
           context: ${{ matrix.service }}
           push: true
           tags: |
-            ${{ secrets.DOCKER_REGISTRY }}/${{ secrets.DOCKER_USERNAME }}/${{ matrix.service }}:latest
-            ${{ secrets.DOCKER_REGISTRY }}/${{ secrets.DOCKER_USERNAME }}/${{ matrix.service }}:${{ github.sha }}
+            ${{ env.IMAGE_BASE }}:latest
+            ${{ env.IMAGE_BASE }}:${{ github.sha }}
 
-  # Notification job (Telegram) — runs always to report pipeline status
-  notify-telegram:
-    name: Notify Telegram
+  deploy:
+    name: Deploy to cluster
     runs-on: ubuntu-latest
-    needs: [ monitoring-tests, order-tests, auth-tests, admin-tests, payment-tests, notification-tests, restaurant-tests, delivery-tests, docker-build-push ]
+    needs: docker-build-push
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: v1.28.0
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > ~/.kube/config
+      - name: Deploy with kustomize overlays
+        run: |
+          kubectl apply -k kubernetes
+
+  notify:
+    name: Notify (Telegram)
+    runs-on: ubuntu-latest
+    needs:
+      - lint
+      - unit-tests
+      - integration-tests
+      - security-scan
+      - docker-build-push
+      - deploy
     if: always()
     steps:
-      - name: Send Telegram Notification
+      - name: Send Telegram notification
         uses: appleboy/telegram-action@master
         with:
           to: ${{ secrets.TELEGRAM_CHAT_ID }}
           token: ${{ secrets.TELEGRAM_TOKEN }}
           message: |
-            🤖 *CI/CD Pipeline Report*
-            Repository: `${{ github.repository }}`
-            Commit: `${{ github.sha }}`
-            Actor: `${{ github.actor }}`
-            
-            Tests:
-            - monitoring: `${{ needs.monitoring-tests.result }}`
-            - order: `${{ needs.order-tests.result }}`
-            - auth: `${{ needs.auth-tests.result }}`
-            - admin: `${{ needs.admin-tests.result }}`
-            - payment: `${{ needs.payment-tests.result }}`
-            - notification: `${{ needs.notification-tests.result }}`
-            - restaurant: `${{ needs.restaurant-tests.result }}`
-            - delivery: `${{ needs.delivery-tests.result }}`
-            
-            Docker Build: `${{ needs.docker-build-push.result }}`
-            
-            Details: https://github.com/${{ github.repository }}/actions
+            CI/CD Pipeline Report
+            Repository: ${{ github.repository }}
+            Commit: ${{ github.sha }}
+            Actor: ${{ github.actor }}
 
- 
+            Lint: ${{ needs.lint.result }}
+            Unit tests: ${{ needs.unit-tests.result }}
+            Integration tests: ${{ needs.integration-tests.result }}
+            Security scan: ${{ needs.security-scan.result }}
+            Build & push: ${{ needs.docker-build-push.result }}
+            Deploy: ${{ needs.deploy.result }}
