@@ -165,7 +165,7 @@ jobs:
   docker-build-push:
     name: Build and push images
     runs-on: ubuntu-latest
-    needs: [test-order-service, test-auth-service, test-admin-service, test-payment-service]
+    needs: [lint, unit-tests, integration-tests, security-scan]
     env:
       TAG_BASE: ${{ secrets.DOCKER_REGISTRY }}/${{ secrets.DOCKER_USERNAME }}
     steps:
