@@ -207,13 +207,24 @@ jobs:
         run: |
           mkdir -p ~/.kube
           tmp="$(mktemp)"
-          # Try base64 decode; if it fails, assume plain kubeconfig.
-          set +e
-          echo "$KUBE_CONFIG_CONTENT" | base64 -d > "$tmp" 2>/dev/null
-          if [ $? -ne 0 ]; then
+          decode_base64() {
+            echo "$1" | base64 -d 2>/dev/null || return 1
+          }
+          is_kubeconfig() {
+            echo "$1" | grep -q "apiVersion:.*v1" && \
+            echo "$1" | grep -q "kind: Cluster" >/dev/null 2>&1
+          }
+          # 1) try base64 decode once
+          if decoded="$(decode_base64 "$KUBE_CONFIG_CONTENT")" && \
+             is_kubeconfig "$decoded"; then
+            echo "$decoded" > "$tmp"
+          # 2) try plain content
+          elif is_kubeconfig "$KUBE_CONFIG_CONTENT"; then
             echo "$KUBE_CONFIG_CONTENT" > "$tmp"
+          else
+            echo "KUBE_CONFIG secret is not a valid kubeconfig."
+            exit 1
           fi
-          set -e
           mv "$tmp" ~/.kube/config
       - name: Deploy with kustomize overlays
         run: |
