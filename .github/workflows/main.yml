@@ -196,9 +196,10 @@ jobs:
     needs: docker-build-push
     env:
       DEPLOY_ENABLED: ${{ secrets.DEPLOY_ENABLED }}
-    if: github.event_name == 'push' && \
-        github.ref == 'refs/heads/main' && \
-        env.DEPLOY_ENABLED == 'true'
+    if: >-
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      env.DEPLOY_ENABLED == 'true'
     steps:
       - uses: actions/checkout@v4
       - name: Set up kubectl
