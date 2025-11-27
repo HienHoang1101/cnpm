@@ -1,0 +1,11 @@
+{
+  "name": "monitoring-tests",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "test": "jest --runInBand --reporters=default"
+  },
+  "devDependencies": {
+    "jest": "^29.0.0"
+  }
+}
