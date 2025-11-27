@@ -4,7 +4,9 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js"
+    "dev": "nodemon index.js",
+    "test": "node -e \"console.log('payment-service: placeholder unit tests');\"",
+    "test:integration": "node -e \"console.log('payment-service: placeholder integration tests');\""
   },
   "type": "module",
   "keywords": [],

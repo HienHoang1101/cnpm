@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "node tests/health-check.js",
+    "test:integration": "node -e \"console.log('notification-service: placeholder integration tests');\"",
     "start": "nodemon index.js"
   },
   "keywords": [],

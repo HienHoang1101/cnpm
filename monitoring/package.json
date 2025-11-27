@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --reporters=default"
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --reporters=default",
+    "test:integration": "node -e \"console.log('monitoring: placeholder integration tests');\""
   },
   "devDependencies": {
     "jest": "^29.0.0",

@@ -8,7 +8,8 @@
     "start": "node index.js",
     "dev": "nodemon index.js",
     "seed:admin": "node utils/seedAdmin.js",
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "test:integration": "node -e \"console.log('auth: placeholder integration tests');\""
   },
   "jest": {
     "testEnvironment": "node",
