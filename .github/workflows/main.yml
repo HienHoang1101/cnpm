@@ -215,8 +215,8 @@ jobs:
           context: ${{ matrix.service }}
           push: true
           tags: |
-            ${{ secrets.DOCKER_REGISTRY }}/cnpm/${{ matrix.service }}:latest
-            ${{ secrets.DOCKER_REGISTRY }}/cnpm/${{ matrix.service }}:${{ github.sha }}
+            ${{ secrets.DOCKER_REGISTRY }}/${{ secrets.DOCKER_USERNAME }}/${{ matrix.service }}:latest
+            ${{ secrets.DOCKER_REGISTRY }}/${{ secrets.DOCKER_USERNAME }}/${{ matrix.service }}:${{ github.sha }}
 
   # Notification job (Telegram) — runs always to report pipeline status
   notify-telegram:
