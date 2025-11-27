@@ -7,6 +7,7 @@ on:
     branches: [ main ]
 
 jobs:
+  # Unit / monitoring test jobs
   monitoring-tests:
     runs-on: ubuntu-latest
     steps:
@@ -52,6 +53,21 @@ jobs:
         working-directory: auth
         run: npm test
 
+  admin-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Install admin deps
+        working-directory: admin-service
+        run: npm ci
+      - name: Run admin tests
+        working-directory: admin-service
+        run: npm test
+
   payment-tests:
     runs-on: ubuntu-latest
     steps:
@@ -88,21 +104,6 @@ jobs:
         working-directory: notification-service
         run: npm test
 
-  admin-tests:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-      - name: Install admin deps
-        working-directory: admin-service
-        run: npm ci
-      - name: Run admin tests
-        working-directory: admin-service
-        run: npm test
-
   restaurant-tests:
     runs-on: ubuntu-latest
     steps:
@@ -134,6 +135,7 @@ jobs:
         working-directory: food-delivery-server
         run: npm test || echo "delivery tests exited non-zero"
 
+  # YAML lint job
   yaml-lint:
     name: YAML Lint
     runs-on: ubuntu-latest
@@ -147,10 +149,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           FILTER_REGEX_EXCLUDE: 'node_modules|.github/workflows'
 
+  # Docker build & push matrix — only runs after lint and tests
   docker-build-push:
     name: Build and Push Docker images
     runs-on: ubuntu-latest
-    needs: [ yaml-lint ]
+    needs: [ monitoring-tests, order-tests, auth-tests, admin-tests, payment-tests, notification-tests, restaurant-tests, delivery-tests, yaml-lint ]
     strategy:
       matrix:
         service: [ auth, admin-service, payment-service, notification-service, restaurant, food-delivery-server, order ]
@@ -171,94 +174,16 @@ jobs:
         with:
           context: ${{ matrix.service }}
           push: true
-          tags: ${{ secrets.DOCKER_REGISTRY }}/cnpm/${{ matrix.service }}:latest
-name: Food Delivery CI/CD Pipeline
+          tags: |
+            ${{ secrets.DOCKER_REGISTRY }}/cnpm/${{ matrix.service }}:latest
+            ${{ secrets.DOCKER_REGISTRY }}/cnpm/${{ matrix.service }}:${{ github.sha }}
 
-on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-jobs:
-  # Parallel test jobs: run all service tests in parallel
-  test-order-service:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18'
-
-      - name: Install & Test Order Service
-        working-directory: ./order
-        run: |
-          if [ -f package-lock.json ]; then npm ci; else npm install; fi
-          node -e "process.exit(require('./package.json').scripts && require('./package.json').scripts.test ? 0 : 1)" && npm test || echo "No test script found, skipping tests"
-
-  test-auth-service:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18'
-
-      - name: Install & Test Auth Service
-        working-directory: ./auth
-        run: |
-          if [ -f package-lock.json ]; then npm ci; else npm install; fi
-          node -e "process.exit(require('./package.json').scripts && require('./package.json').scripts.test ? 0 : 1)" && npm test || echo "No test script found, skipping tests"
-
-  test-admin-service:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18'
-
-      - name: Install & Test Admin Service
-        working-directory: ./admin-service
-        run: |
-          if [ -f package-lock.json ]; then npm ci; else npm install; fi
-          node -e "process.exit(require('./package.json').scripts && require('./package.json').scripts.test ? 0 : 1)" && npm test || echo "No test script found, skipping tests"
-
-  # BUILD & PUSH DOCKER (runs only after all tests succeed)
-  build-push-docker:
-    needs: [test-order-service, test-auth-service, test-admin-service]
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' # Only build on push (not PR)
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: Build and Push Order Service
-        uses: docker/build-push-action@v4
-        with:
-          context: ./order
-          push: true
-          tags: ${{ secrets.DOCKER_USERNAME }}/food-order-service:latest
-
-  # NOTIFY TELEGRAM (run after tests and build; always runs to report status)
+  # Notification job (Telegram) — runs always to report pipeline status
   notify-telegram:
-    needs: [test-order-service, test-auth-service, test-admin-service, build-push-docker]
+    name: Notify Telegram
     runs-on: ubuntu-latest
-    if: always() # Always run to report results
+    needs: [ monitoring-tests, order-tests, auth-tests, admin-tests, payment-tests, notification-tests, restaurant-tests, delivery-tests, docker-build-push ]
+    if: always()
     steps:
       - name: Send Telegram Notification
         uses: appleboy/telegram-action@master
@@ -266,13 +191,23 @@ jobs:
           to: ${{ secrets.TELEGRAM_CHAT_ID }}
           token: ${{ secrets.TELEGRAM_TOKEN }}
           message: |
-            🤖 **CI/CD Pipeline Report**
-            --------------------------------------
-            📂 Repository: ${{ github.repository }}
-            👤 Committer: ${{ github.actor }}
-            📝 Message: ${{ github.event.head_commit.message }}
+            🤖 *CI/CD Pipeline Report*
+            Repository: `${{ github.repository }}`
+            Commit: `${{ github.sha }}`
+            Actor: `${{ github.actor }}`
             
-            ✅ Test Status: ${{ needs.test-order-service.result }} / ${{ needs.test-auth-service.result }} / ${{ needs.test-admin-service.result }}
-            🐳 Build Docker: ${{ needs.build-push-docker.result }}
+            Tests:
+            - monitoring: `${{ needs.monitoring-tests.result }}`
+            - order: `${{ needs.order-tests.result }}`
+            - auth: `${{ needs.auth-tests.result }}`
+            - admin: `${{ needs.admin-tests.result }}`
+            - payment: `${{ needs.payment-tests.result }}`
+            - notification: `${{ needs.notification-tests.result }}`
+            - restaurant: `${{ needs.restaurant-tests.result }}`
+            - delivery: `${{ needs.delivery-tests.result }}`
             
-            🔗 Chi tiết: https://github.com/${{ github.repository }}/actions
+            Docker Build: `${{ needs.docker-build-push.result }}`
+            
+            Details: https://github.com/${{ github.repository }}/actions
+
+ 
