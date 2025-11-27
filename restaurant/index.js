@@ -55,4 +55,8 @@ const startServer = async () => {
     console.error("❌ Error connecting to the database:", error);
   }
 };
-startServer();
+if (process.env.NODE_ENV !== "test") {
+  startServer();
+}
+
+export default app;

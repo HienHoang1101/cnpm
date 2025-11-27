@@ -5,8 +5,8 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "test": "node -e \"console.log('payment-service: placeholder unit tests');\"",
-    "test:integration": "node -e \"console.log('payment-service: placeholder integration tests');\""
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "test:integration": "node --test"
   },
   "type": "module",
   "keywords": [],
@@ -19,10 +19,12 @@
     "dotenv": "^16.6.1",
     "express": "^5.1.0",
     "mongoose": "^8.13.2",
-    "stripe": "^18.0.0",
-    "prom-client": "^15.1.3"
+    "prom-client": "^15.1.3",
+    "stripe": "^18.0.0"
   },
   "devDependencies": {
-    "nodemon": "^3.1.9"
+    "jest": "^30.2.0",
+    "nodemon": "^3.1.9",
+    "supertest": "^7.1.4"
   }
 }
