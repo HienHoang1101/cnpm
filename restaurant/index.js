@@ -11,7 +11,7 @@ const app = express();
 dotenv.config();
 
 // --- MONITORING: use shared metrics helper ---
-import { collectDefaults, createHttpMetrics, register } from "../monitoring/metrics/metrics.js";
+import { collectDefaults, createHttpMetrics, register } from "./monitoring_metrics.js";
 
 collectDefaults();
 const { middleware: metricsMiddleware } = createHttpMetrics("restaurant-service");
