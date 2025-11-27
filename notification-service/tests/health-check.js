@@ -1,6 +1,6 @@
-const axios = require('axios');
+import axios from 'axios';
 
-(async () => {
+const run = async () => {
   try {
     const res = await axios.get('http://localhost:5007/health', { timeout: 5000 });
     if (res.status === 200 && res.data && res.data.status === 'ok') {
@@ -13,4 +13,6 @@ const axios = require('axios');
     console.error('Health check failed:', err.message);
     process.exit(1);
   }
-})();
+};
+
+run();
