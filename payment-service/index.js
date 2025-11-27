@@ -11,27 +11,17 @@ console.log("🔑 Stripe secret:", process.env.STRIPE_WEBHOOK_SECRET);
 const app = express();
 
 // --- MONITORING: Prometheus client setup ---
-import client from "prom-client";
-client.collectDefaultMetrics();
+import { collectDefaults, createHttpMetrics, register } from "../monitoring/metrics/metrics.js";
 
-const httpRequestDuration = new client.Histogram({
-  name: "http_request_duration_seconds",
-  help: "Duration of HTTP requests in seconds",
-  labelNames: ["method", "route", "code"],
-  buckets: [0.1, 0.3, 0.5, 1, 3, 5],
-});
+// initialize default process metrics
+collectDefaults();
 
-app.use((req, res, next) => {
-  const end = httpRequestDuration.startTimer();
-  res.on("finish", () => {
-    end({ method: req.method, route: req.route ? req.route.path : req.path, code: res.statusCode });
-  });
-  next();
-});
+const { middleware: metricsMiddleware } = createHttpMetrics("payment-service");
+app.use(metricsMiddleware);
 
 app.get("/metrics", async (req, res) => {
-  res.set("Content-Type", client.register.contentType);
-  res.end(await client.register.metrics());
+  res.set("Content-Type", register.contentType);
+  res.end(await register.metrics());
 });
 // --- end monitoring ---
 
