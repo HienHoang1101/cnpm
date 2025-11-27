@@ -149,8 +149,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [lint, unit-tests, integration-tests, security-scan]
     env:
-      REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
-      REGISTRY_USER: ${{ secrets.DOCKER_USERNAME }}
+      TAG_BASE: ${{ secrets.DOCKER_REGISTRY }}/${{ secrets.DOCKER_USERNAME }}
     strategy:
       fail-fast: false
       matrix:
@@ -168,25 +167,28 @@ jobs:
         uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+      - name: Verify registry secrets
+        run: |
+          if [ -z "${{ secrets.DOCKER_REGISTRY }}" ] || \
+             [ -z "${{ secrets.DOCKER_USERNAME }}" ] || \
+             [ -z "${{ secrets.DOCKER_PASSWORD }}" ]; then
+            echo "Docker registry secrets missing"
+            exit 1
+          fi
       - name: Login to registry
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ env.REGISTRY_USER }}
+          registry: ${{ secrets.DOCKER_REGISTRY }}
+          username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
       - name: Build and push image
         uses: docker/build-push-action@v5
-        env:
-          R: ${{ env.REGISTRY }}
-          U: ${{ env.REGISTRY_USER }}
-          SVC: ${{ matrix.service }}
-          IMAGE_BASE: ${{ env.R }}/${{ env.U }}/${{ env.SVC }}
         with:
           context: ${{ matrix.service }}
           push: true
           tags: |
-            ${{ env.IMAGE_BASE }}:latest
-            ${{ env.IMAGE_BASE }}:${{ github.sha }}
+            ${{ env.TAG_BASE }}/${{ matrix.service }}:latest
+            ${{ env.TAG_BASE }}/${{ matrix.service }}:${{ github.sha }}
 
   deploy:
     name: Deploy to cluster
