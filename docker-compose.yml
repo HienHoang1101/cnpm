@@ -1,3 +1,4 @@
+---
 version: "3.8"
 
 services:
@@ -161,7 +162,7 @@ services:
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
     restart: unless-stopped
 
-  node-exporter: # Để đo thông số phần cứng (CPU/RAM)
+  node-exporter:  # Để đo thông số phần cứng (CPU/RAM)
     image: prom/node-exporter:latest
     container_name: node-exporter
     ports:
