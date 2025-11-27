@@ -212,7 +212,7 @@ jobs:
           }
           is_kubeconfig() {
             echo "$1" | grep -q "apiVersion:.*v1" && \
-            echo "$1" | grep -q "kind: Cluster" >/dev/null 2>&1
+            echo "$1" | grep -q "kind: Config" >/dev/null 2>&1
           }
           # 1) try base64 decode once
           if decoded="$(decode_base64 "$KUBE_CONFIG_CONTENT")" && \
