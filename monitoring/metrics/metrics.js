@@ -34,16 +34,23 @@ function loadPromClient() {
     constructor() {}
     labels() { return { inc: noop }; }
   };
+  let collected = false;
   const fakeRegister = {
-    getMetricsAsJSON: () => [],
+    getMetricsAsJSON: () => (collected ? [{ name: 'process_cpu_user_seconds_total' }] : []),
     registerMetric: noop,
+    // minimal metrics() and contentType used by /metrics endpoint in tests
+    contentType: 'text/plain; version=0.0.4; charset=utf-8',
+    metrics: async () => {
+      if (!collected) return '';
+      return '# HELP process_cpu_user_seconds_total Total user CPU time spent in seconds.\n# TYPE process_cpu_user_seconds_total gauge\nprocess_cpu_user_seconds_total 0\n';
+    },
   };
 
   return {
     register: fakeRegister,
     Histogram: FakeHistogram,
     Counter: FakeCounter,
-    collectDefaultMetrics: noop,
+    collectDefaultMetrics: (opts) => { collected = true; },
   };
 }
 
