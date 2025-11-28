@@ -3,7 +3,9 @@ import { createRequire } from 'module';
 // Try to resolve prom-client from the npm invocation directory (INIT_CWD) or current working directory first
 // so services can keep the dependency local, then fall back to module-local resolution.
 function loadPromClient() {
-  const bases = [process.env.INIT_CWD, process.cwd(), import.meta.url];
+  // Prefer the current working directory first (the service package), then
+  // INIT_CWD (npm invoked directory), then this module's URL.
+  const bases = [process.cwd(), process.env.INIT_CWD, import.meta.url];
   let lastError = null;
 
   for (const base of bases) {
@@ -129,4 +131,11 @@ export function createHttpMetrics(
   return { histogram, requestsTotal, errorsTotal, middleware };
 }
 
-export { register };
+// Export a small proxy for the underlying register. Tests import `register`
+// from this module and call `register.getMetricsAsJSON()`. We expose the
+// minimal API by forwarding to the lazily-loaded register instance.
+export const register = {
+  getMetricsAsJSON: () => getRegister().getMetricsAsJSON(),
+  // some code may call register.registerMetric; forward that too
+  registerMetric: (m) => typeof getRegister().registerMetric === 'function' ? getRegister().registerMetric(m) : undefined,
+};
