@@ -45,17 +45,24 @@ function loadPromClient() {
   };
 }
 
-const client = loadPromClient();
+// Lazy-load prom-client (or the stub) on first use. This avoids static module
+// resolution issues in test runners (Jest) which may attempt to resolve
+// 'prom-client' during module evaluation. The loader caches the resolved
+// client on the global object so multiple imports share the same instance.
+function getClient() {
+  if (global.__promClient) return global.__promClient;
+  const c = loadPromClient();
+  global.__promClient = c;
+  return c;
+}
 
-// Centralized metrics helper for all services in the monorepo.
-// This file ensures default metrics are only collected once per process
-// and exposes helpers to create HTTP metrics with consistent labels.
-
-const register = client.register;
+function getRegister() {
+  return getClient().register;
+}
 
 function hasMetric(name) {
   try {
-    const metrics = register.getMetricsAsJSON();
+    const metrics = getRegister().getMetricsAsJSON();
     return metrics.some((m) => m.name === name);
   } catch (e) {
     return false;
@@ -65,7 +72,11 @@ function hasMetric(name) {
 export function collectDefaults(interval = 5000) {
   // Avoid registering default metrics multiple times in the same process
   if (hasMetric('process_cpu_user_seconds_total')) return;
-  client.collectDefaultMetrics({ timeout: interval });
+  try {
+    getClient().collectDefaultMetrics({ timeout: interval });
+  } catch (e) {
+    // ignore
+  }
 }
 
 export function createHttpMetrics(
@@ -73,6 +84,7 @@ export function createHttpMetrics(
   buckets = [0.1, 0.3, 0.5, 1, 3, 5],
   project = 'fastfood-delivery'
 ) {
+  const client = getClient();
   const histogram = new client.Histogram({
     name: 'http_request_duration_seconds',
     help: 'Duration of HTTP requests in seconds',
