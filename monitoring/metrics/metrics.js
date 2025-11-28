@@ -134,8 +134,14 @@ export function createHttpMetrics(
 // Export a small proxy for the underlying register. Tests import `register`
 // from this module and call `register.getMetricsAsJSON()`. We expose the
 // minimal API by forwarding to the lazily-loaded register instance.
-export const register = {
-  getMetricsAsJSON: () => getRegister().getMetricsAsJSON(),
-  // some code may call register.registerMetric; forward that too
-  registerMetric: (m) => typeof getRegister().registerMetric === 'function' ? getRegister().registerMetric(m) : undefined,
-};
+// Export a proxy that forwards any property access to the underlying register
+// instance. This lets callers use `register.metrics()`, `register.contentType`,
+// and other properties seamlessly regardless of when the client is loaded.
+export const register = new Proxy({}, {
+  get: (_target, prop) => {
+    const r = getRegister();
+    const v = r[prop];
+    if (typeof v === 'function') return v.bind(r);
+    return v;
+  },
+});
