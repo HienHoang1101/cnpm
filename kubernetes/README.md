@@ -1,6 +1,63 @@
 # Kubernetes Deployment Guide for Food Delivery System
 
-This guide explains how to deploy the Cloud-Native Food Ordering and Delivery System on Kubernetes.
+This guide explains how to deploy the Cloud-Native Food Ordering and Delivery System on Kubernetes. Monitoring is first-class: bring up observability before rolling out the app services.
+
+## Quickstart (monitoring-first)
+
+1) Prepare environment  
+- Copy `.env.example` to `.env`, set `DOCKER_REGISTRY` and credentials for every service.  
+- Start a cluster (example: `minikube start --cpus 4 --memory 8g`).  
+
+2) Deploy namespace and infrastructure  
+```bash
+kubectl apply -f kubernetes/namespace.yaml
+kubectl apply -f kubernetes/mongodb.yaml
+kubectl apply -f kubernetes/kafka.yaml
+kubectl apply -f kubernetes/secrets.yaml
+```
+
+3) Install monitoring stack before app pods  
+- Fast path: local demo via Docker Compose (includes Prometheus, Grafana, Loki, Promtail, Alertmanager):  
+  ```bash
+  docker-compose up -d prometheus grafana loki promtail alertmanager node-exporter
+  ```  
+- Kubernetes path (recommended for grading):  
+  ```bash
+  helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+  helm repo add grafana https://grafana.github.io/helm-charts
+  helm upgrade --install monitoring prometheus-community/kube-prometheus-stack -n food-delivery --create-namespace
+  helm upgrade --install loki grafana/loki-stack -n food-delivery
+  ```  
+  Import dashboards from `monitoring/grafana/dashboards` into Grafana; point Prometheus at the services via service discovery or static targets.
+
+4) Build and push images  
+```bash
+export DOCKER_REGISTRY=your-registry
+docker-compose build
+TAG_BASE=${DOCKER_REGISTRY}/$(whoami)
+for svc in auth admin-service payment-service notification-service restaurant food-delivery-server order; do
+  docker tag food-delivery_${svc} ${TAG_BASE}/${svc}:latest
+  docker push ${TAG_BASE}/${svc}:latest
+done
+```
+
+5) Deploy application services with kustomize  
+```bash
+kubectl apply -k kubernetes/
+```
+
+6) Smoke checks  
+```bash
+kubectl get pods -n food-delivery
+kubectl logs -n food-delivery deployment/auth-service
+kubectl get ing -n food-delivery
+```
+
+7) Basic rollback/scale  
+```bash
+kubectl rollout undo deployment/order-service -n food-delivery
+kubectl scale deployment/order-service --replicas=3 -n food-delivery
+```
 
 ## Prerequisites
 

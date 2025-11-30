@@ -1,0 +1,124 @@
+{
+  "uid": "services-overview",
+  "title": "Services Overview",
+  "schemaVersion": 30,
+  "version": 1,
+  "refresh": "10s",
+  "templating": {
+    "list": [
+      {
+        "type": "query",
+        "name": "service",
+        "label": "Service",
+        "datasource": "Prometheus",
+        "query": "label_values(job)",
+        "includeAll": true,
+        "multi": true,
+        "allValue": ".*",
+        "refresh": 1
+      },
+      {
+        "type": "custom",
+        "name": "severity",
+        "label": "Severity",
+        "query": "All,info,warn,error",
+        "multi": false,
+        "includeAll": true,
+        "allValue": ".*",
+        "refresh": 0
+      },
+      {
+        "type": "query",
+        "name": "service_single",
+        "label": "Service (single)",
+        "datasource": "Prometheus",
+        "query": "label_values(job)",
+        "includeAll": false,
+        "multi": false,
+        "refresh": 1
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Active Users (Total)",
+      "id": 1,
+      "datasource": "Prometheus",
+      "gridPos": { "x": 0, "y": 0, "w": 8, "h": 6 },
+      "targets": [ { "expr": "sum(max_over_time(app_active_users_total[5m]))", "refId": "A" } ],
+      "fieldConfig": { "defaults": { "unit": "none", "decimals": 0, "min": 0 } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "values": false }, "justifyMode": "center" }
+    },
+    {
+      "type": "stat",
+      "title": "Requests/sec (Total)",
+      "id": 2,
+      "datasource": "Prometheus",
+      "gridPos": { "x": 8, "y": 0, "w": 8, "h": 6 },
+      "targets": [ { "expr": "sum(rate(http_request_duration_seconds_count[1m]))", "refId": "A" } ],
+      "fieldConfig": { "defaults": { "unit": "req/s", "decimals": 2, "min": 0 } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "values": false }, "justifyMode": "center" }
+    },
+    {
+      "type": "timeseries",
+      "title": "Requests/sec by Service (job)",
+      "id": 3,
+      "datasource": "Prometheus",
+      "gridPos": { "x": 0, "y": 6, "w": 16, "h": 8 },
+      "targets": [ { "expr": "sum by (job)(rate(http_request_duration_seconds_count[1m]))", "refId": "A" } ],
+      "fieldConfig": { "defaults": { "unit": "req/s", "decimals": 2, "min": 0 } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Error Rate (5xx) by Service",
+      "id": 4,
+      "datasource": "Prometheus",
+      "gridPos": { "x": 0, "y": 14, "w": 16, "h": 8 },
+      "targets": [ { "expr": "sum by (job)(rate(http_request_duration_seconds_count{code=~\"5..\"}[5m]))", "refId": "A" } ],
+      "fieldConfig": { "defaults": { "unit": "req/s", "decimals": 2, "min": 0 } }
+    },
+    {
+      "type": "timeseries",
+      "title": "P95 Latency by Service (ms)",
+      "id": 5,
+      "datasource": "Prometheus",
+      "gridPos": { "x": 0, "y": 22, "w": 16, "h": 8 },
+      "targets": [ { "expr": "histogram_quantile(0.95, sum by (le, job) (rate(http_request_duration_seconds_bucket[5m]))) * 1000", "refId": "A" } ],
+      "fieldConfig": { "defaults": { "unit": "ms", "decimals": 2, "min": 0 } }
+    },
+    {
+      "type": "logs",
+      "title": "Logs (Loki) - filter by Service",
+      "id": 6,
+      "datasource": "Loki",
+      "gridPos": { "x": 0, "y": 30, "w": 16, "h": 10 },
+      "targets": [ { "expr": "{service_name=~\"$service\"}", "refId": "A" } ],
+      "fieldConfig": { "defaults": {}, "overrides": [] }
+    },
+    
+    {
+      "type": "timeseries",
+      "title": "P95 Latency (per service)",
+      "id": 7,
+      "datasource": "Prometheus",
+      "gridPos": { "x": 0, "y": 41, "w": 8, "h": 6 },
+      "targets": [ { "expr": "histogram_quantile(0.95, sum by (le, job) (rate(http_request_duration_seconds_bucket[5m]))) * 1000", "refId": "A", "legendFormat": "{{job}}" } ],
+      "repeat": "service_single",
+      "fieldConfig": { "defaults": { "unit": "ms", "decimals": 2, "min": 0 } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Error Rate (5xx) (per service)",
+      "id": 8,
+      "datasource": "Prometheus",
+      "gridPos": { "x": 8, "y": 41, "w": 8, "h": 6 },
+      "targets": [ { "expr": "sum(rate(http_request_duration_seconds_count{code=~\"5..\", job=\"$service_single\"}[5m]))", "refId": "A", "legendFormat": "{{job}}" } ],
+      "repeat": "service_single",
+      "fieldConfig": { "defaults": { "unit": "req/s", "decimals": 2, "min": 0 } }
+    }
+  ],
+  "timezone": "browser",
+  "links": []
+
+}

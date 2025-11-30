@@ -1,0 +1,9 @@
+{
+  "id": null,
+  "uid": "node-exporter-simple-alt",
+  "title": "Node Exporter - Simple (alt)",
+  "schemaVersion": 27,
+  "version": 1,
+  "refresh": "5s",
+  "panels": []
+}
