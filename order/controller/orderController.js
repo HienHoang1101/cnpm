@@ -28,27 +28,9 @@ const getRestaurantById = async (authorization, restaurantId) => {
 };
 
 /**
- * @swagger
- * /api/orders:
- *   post:
- *     summary: Create a new order
- *     tags: [Orders]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               restaurantId:
- *                 type: string
- *               items:
- *                 type: array
- *                 items:
- *                   type: object
- *     responses:
- *       '201':
- *         description: Order created successfully
+ * Create a new order from cart items
+ * @route POST /api/orders
+ * @access Private - Customer
  */
 const createOrder = async (req, res) => {
   try {

@@ -313,27 +313,6 @@ For each microservice:
 
 2. Configure alerts and dashboards
 
-### Local monitoring quickstart
-
-You can run a lightweight local monitoring stack (Prometheus + Grafana + Alertmanager) using the included compose file and sample configs.
-
-1. Start the monitoring stack (from repository root):
-
-```powershell
-docker compose -f docker-compose.monitoring.yml up -d --build
-```
-
-2. Grafana is available at `http://localhost:3000` (default admin/admin). The repository contains datasource and dashboard provisioning under `monitoring/grafana`.
-
-3. Prometheus is available at `http://localhost:9090`. Prometheus config and alert rules live in `prometheus/`.
-
-4. To stop the stack:
-
-```powershell
-docker compose -f docker-compose.monitoring.yml down
-```
-
-
 ### Backup Procedures
 
 1. MongoDB backups:

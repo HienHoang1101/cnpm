@@ -6,12 +6,11 @@
   "type": "module",
   "scripts": {
     "start": "nodemon index.js",
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand",
-    "test:integration": "node -e \"console.log('order: placeholder integration tests');\""
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/HienHoang1101/cnpm.git/tree/main/order"
+    "url": "https://github.com/IT22052124/Cloud-Native-Food-Ordering-Delivery-System/tree/main/order"
   },
   "keywords": [
     "order",
@@ -32,18 +31,6 @@
     "mongoose": "^8.13.0",
     "morgan": "^1.10.0",
     "nodemon": "^3.1.9",
-    "prom-client": "^15.1.3",
-    "ws": "^8.14.2",
-    "swagger-jsdoc": "^6.2.8",
-    "swagger-ui-express": "^4.6.3"
-  },
-  "devDependencies": {
-    "swagger-jsdoc": "^6.2.8",
-    "swagger-ui-express": "^4.6.3",
-    "jest": "^29.7.0",
-    "supertest": "^6.3.4"
-  },
-  "jest": {
-    "testEnvironment": "node"
+    "ws": "^8.14.2"
   }
 }

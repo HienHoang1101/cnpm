@@ -2,27 +2,12 @@ import Stripe from "stripe";
 import Payment from "../models/Payment.js";
 import axios from "axios";
 
-const STRIPE_API_VERSION = "2023-08-16";
-
-let stripeClient;
-
-const getStripeClient = () => {
-  if (stripeClient) return stripeClient;
-
-  const secret = process.env.STRIPE_SECRET_KEY;
-
-  if (!secret) {
-    // In test environments we just need a valid-looking key to satisfy the Stripe SDK.
-    if (process.env.NODE_ENV === "test") {
-      stripeClient = new Stripe("REPLACED_STRIPE_KEY", { apiVersion: STRIPE_API_VERSION });
-      return stripeClient;
-    }
-    throw new Error("STRIPE_SECRET_KEY is not configured");
+const stripe = new Stripe(
+  "REPLACED_STRIPE_KEY",
+  {
+    apiVersion: "2023-08-16",
   }
-
-  stripeClient = new Stripe(secret, { apiVersion: STRIPE_API_VERSION });
-  return stripeClient;
-};
+);
 
 // Initiate Payment
 const initiatePayment = async (req, res) => {
@@ -51,8 +36,6 @@ const initiatePayment = async (req, res) => {
     }
 
     // 2. Create Stripe Payment Intent
-    const stripe = getStripeClient();
-
     const paymentIntent = await stripe.paymentIntents.create({
       amount: amount, // Convert to cents
       currency: currency.toLowerCase(),
@@ -107,8 +90,6 @@ const handleWebhook = async (req, res) => {
   let event;
 
   try {
-    const stripe = getStripeClient();
-
     event = stripe.webhooks.constructEvent(
       req.body,
       sig,

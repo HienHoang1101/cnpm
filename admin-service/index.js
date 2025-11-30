@@ -11,19 +11,6 @@ dotenv.config();
 // Initialize Express
 const app = express();
 
-// --- MONITORING: use shared metrics helper ---
-import { collectDefaults, createHttpMetrics, register } from "./monitoring_metrics.js";
-
-collectDefaults();
-const { middleware: metricsMiddleware } = createHttpMetrics("admin-service");
-app.use(metricsMiddleware);
-
-app.get("/metrics", async (req, res) => {
-  res.set("Content-Type", register.contentType);
-  res.end(await register.metrics());
-});
-// --- end monitoring ---
-
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

@@ -1,7 +1,6 @@
 import User from "../model/User.js";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
-import { activeUsersGauge } from "../utils/metrics.js";
 
 /**
  * Register a new user
@@ -136,13 +135,6 @@ const login = async (req, res) => {
       sameSite: "strict",
     });
 
-    // Increment active users gauge when login succeeds
-    try {
-      activeUsersGauge.inc({ role: user.role || "customer" });
-    } catch (err) {
-      console.warn("Failed to increment activeUsersGauge:", err && err.message ? err.message : err);
-    }
-
     res.status(200).json({
       success: true,
       message: "Login successful",
@@ -231,14 +223,6 @@ const logout = async (req, res) => {
     }
 
     res.clearCookie("refreshToken");
-
-    // Decrement active users gauge on logout
-    try {
-      const userRole = req.user?.role || "customer";
-      activeUsersGauge.dec({ role: userRole });
-    } catch (err) {
-      console.warn("Failed to decrement activeUsersGauge:", err && err.message ? err.message : err);
-    }
 
     res.status(200).json({
       success: true,

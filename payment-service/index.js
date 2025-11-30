@@ -3,28 +3,11 @@ import cors from "cors";
 import express from "express";
 import mongoose from "mongoose";
 import paymentRoutes from "./routes/paymentRoutes.js";
-import client from "prom-client";
 
-dotenv.config({ path: "../.env" }); // 👈 thêm dòng này
-console.log("🔑 Stripe secret:", process.env.STRIPE_WEBHOOK_SECRET);
+dotenv.config();
 
 // Initialize Express
 const app = express();
-
-// --- MONITORING: Prometheus client setup ---
-import { collectDefaults, createHttpMetrics, register } from "../monitoring/metrics/metrics.js";
-
-// initialize default process metrics
-collectDefaults();
-
-const { middleware: metricsMiddleware } = createHttpMetrics("payment-service");
-app.use(metricsMiddleware);
-
-app.get("/metrics", async (req, res) => {
-  res.set("Content-Type", register.contentType);
-  res.end(await register.metrics());
-});
-// --- end monitoring ---
 
 // Apply CORS globally
 app.use(cors());
@@ -46,22 +29,16 @@ global.gConfig = {
 };
 
 // Database Connection
-if (process.env.NODE_ENV !== "test") {
-  mongoose
-    .connect(process.env.MONGO_URI)
-    .then(() => console.log("Connected to MongoDB"))
-    .catch((err) => console.error("MongoDB connection error:", err));
-}
+mongoose
+  .connect(process.env.MONGO_URI)
+  .then(() => console.log("Connected to MongoDB"))
+  .catch((err) => console.error("MongoDB connection error:", err));
 
 // Routes
 app.use("/api/payment", paymentRoutes);
 
-// Start Server (skip in test environment)
+// Start Server
 const PORT = process.env.PORT || 5004;
-if (process.env.NODE_ENV !== "test") {
-  app.listen(PORT, () => {
-    console.log(`Payment service running on port ${PORT}`);
-  });
-}
-
-export default app;
+app.listen(PORT, () => {
+  console.log(`Payment service running on port ${PORT}`);
+});

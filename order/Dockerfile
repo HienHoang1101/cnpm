@@ -5,8 +5,8 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies (include dev deps so Swagger packages are present)
-RUN npm install
+# Install dependencies
+RUN npm install --production
 
 # Copy application code
 COPY . .

@@ -76,7 +76,7 @@ docker-compose.override.yml
 .circleci/
 .travis.yml
 .gitlab-ci.yml
-
+.github/
 
 **/node_modules
 **/.env
