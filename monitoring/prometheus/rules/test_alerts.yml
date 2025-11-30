@@ -1,0 +1,13 @@
+---
+groups:
+  - name: test.rules
+    rules:
+      - alert: TestAlertFiring
+        expr: vector(1)
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Test alert from local Prometheus"
+          description: >
+            This alert is used to verify Alertmanager -> Telegram delivery.

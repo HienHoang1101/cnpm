@@ -1,0 +1,423 @@
+---
+name: CI/CD Pipeline
+
+'on':
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
+  IMAGE_NAMESPACE: ${{ secrets.DOCKER_USERNAME }}
+
+jobs:
+  lint:
+    name: Lint (Super-Linter)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Super-Linter
+        uses: github/super-linter@v4
+        env:
+          DEFAULT_BRANCH: main
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VALIDATE_ALL_CODEBASE: false
+          FILTER_REGEX_EXCLUDE: >-
+            (^|/)(node_modules|vendor|dist|build|coverage|.git)/
+
+  unit-tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: monitoring
+            path: monitoring
+          - name: order
+            path: order
+          - name: auth
+            path: auth
+          - name: admin-service
+            path: admin-service
+          - name: payment-service
+            path: payment-service
+          - name: notification-service
+            path: notification-service
+          - name: restaurant
+            path: restaurant
+          - name: food-delivery-server
+            path: food-delivery-server
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Install dependencies
+        working-directory: ${{ matrix.path }}
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+      - name: Run unit tests (skip if missing)
+        working-directory: ${{ matrix.path }}
+        run: |
+          if node - <<'NODE'
+            const p = require('./package.json');
+            if (p.scripts && p.scripts.test) process.exit(0);
+            process.exit(1);
+          NODE
+          then
+            # if this matrix entry is payment-service set a dummy stripe key for tests
+            if [ "${{ matrix.name }}" = "payment-service" ]; then
+              export STRIPE_SECRET_KEY=sk_test_dummy
+              echo "Set STRIPE_SECRET_KEY for payment-service tests"
+            fi
+            npm test
+          else
+            echo "No test script for ${{ matrix.name }}, skipping."
+          fi
+
+  integration-tests:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: monitoring
+            path: monitoring
+          - name: order
+            path: order
+          - name: auth
+            path: auth
+          - name: admin-service
+            path: admin-service
+          - name: payment-service
+            path: payment-service
+          - name: notification-service
+            path: notification-service
+          - name: restaurant
+            path: restaurant
+          - name: food-delivery-server
+            path: food-delivery-server
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Install dependencies
+        working-directory: ${{ matrix.path }}
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+      - name: Run integration tests (skip if missing)
+        working-directory: ${{ matrix.path }}
+        run: |
+          if node - <<'NODE'
+            const p = require('./package.json');
+            if (p.scripts && p.scripts['test:integration']) process.exit(0);
+            process.exit(1);
+          NODE
+          then
+            npm run test:integration
+          else
+            echo "No integration test script for ${{ matrix.name }}, skipping."
+          fi
+
+  security-scan:
+    name: Security scan (Trivy)
+    runs-on: ubuntu-latest
+    needs: [lint, unit-tests]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Trivy FS scan
+        uses: aquasecurity/trivy-action@0.20.0
+        with:
+          scan-type: fs
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+          format: table
+
+  test-payment-service:
+    name: Test Payment Service
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install & Test Payment Service
+        working-directory: ./payment-service
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm install; fi
+          # supply a test stripe key so Stripe client constructs during tests
+          export STRIPE_SECRET_KEY=sk_test_dummy
+          npm test
+
+  docker-build-push:
+    name: Build and push images
+    runs-on: ubuntu-latest
+    needs: [lint, unit-tests, integration-tests, security-scan, monitoring-tests]
+    env:
+      TAG_BASE: ${{ secrets.DOCKER_REGISTRY }}/${{ secrets.DOCKER_USERNAME }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Verify registry secrets
+        run: |
+          if [ -z "${{ secrets.DOCKER_REGISTRY }}" ] || \
+             [ -z "${{ secrets.DOCKER_USERNAME }}" ] || \
+             [ -z "${{ secrets.DOCKER_PASSWORD }}" ]; then
+            echo "Docker registry secrets missing"
+            exit 1
+          fi
+      - name: Login to registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.DOCKER_REGISTRY }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      # 1. Build Order Service (existing)
+      - name: Build and Push Order Service
+        uses: docker/build-push-action@v4
+        with:
+          context: ./order
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/food-order-service:latest
+
+      # 2. Build Auth Service
+      - name: Build and Push Auth Service
+        uses: docker/build-push-action@v4
+        with:
+          context: ./auth
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/food-auth-service:latest
+
+      # 3. Build Payment Service
+      - name: Build and Push Payment Service
+        uses: docker/build-push-action@v4
+        with:
+          context: ./payment-service
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/food-payment-service:latest
+
+      # 4. Build Admin Service
+      - name: Build and Push Admin Service
+        uses: docker/build-push-action@v4
+        with:
+          context: ./admin-service
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/food-admin-service:latest
+
+      # 5. Build Notification Service
+      - name: Build and Push Notification Service
+        uses: docker/build-push-action@v4
+        with:
+          context: ./notification-service
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/food-notification-service:latest
+
+  monitoring-tests:
+    name: Monitoring tests (metrics endpoints)
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests, security-scan]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: payment-service
+            path: payment-service
+          - name: order
+            path: order
+          - name: restaurant
+            path: restaurant
+          - name: notification-service
+            path: notification-service
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Install dependencies
+        working-directory: ${{ matrix.path }}
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+      - name: Run metrics tests (if present)
+        working-directory: ${{ matrix.path }}
+        run: |
+          if node - <<'NODE'
+            try {
+              const p = require('./package.json');
+              if (p.devDependencies && (p.devDependencies.jest || p.devDependencies['supertest'])) process.exit(0);
+            } catch (e) {}
+            process.exit(1);
+          NODE
+          then
+            npm test --silent || (cat "no-tests-or-failed" && exit 1)
+          else
+            echo "No monitoring tests for ${{ matrix.name }}, skipping."
+          fi
+
+  monitoring-provisioning-check:
+    name: Monitoring provisioning smoke test
+    runs-on: ubuntu-latest
+    needs: [monitoring-tests]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Docker
+        uses: docker/setup-buildx-action@v3
+      - name: Create network
+        run: |
+          docker network create monitoring-ci || true
+      - name: Start Prometheus (CI)
+        run: |
+          # Use the CI prometheus config which includes the test-exporter job
+          docker run -d --rm --name prometheus-ci --network monitoring-ci \
+            -v ${{ github.workspace }}/monitoring/prometheus/prometheus-ci.yml:/etc/prometheus/prometheus.yml:ro \
+            -v ${{ github.workspace }}/monitoring/prometheus/rules:/etc/prometheus/rules:ro \
+            -p 9090:9090 prom/prometheus:latest
+      - name: Start Grafana (CI)
+        run: |
+          docker run -d --rm --name grafana-ci --network monitoring-ci \
+            -e GF_SECURITY_ADMIN_PASSWORD=admin \
+            -v ${{ github.workspace }}/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro \
+            -v ${{ github.workspace }}/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro \
+            -p 3000:3000 grafana/grafana:latest
+      - name: Start test exporter (simple HTTP metrics)
+        run: |
+          # Start a tiny Python-based metrics endpoint that exposes `sample_test_metric` on /metrics
+          docker run -d --rm --name test-exporter --network monitoring-ci -p 9101:9101 python:3.9-slim \
+            sh -c "cat > /tmp/server.py <<'PY'\nfrom http.server import BaseHTTPRequestHandler,HTTPServer\nclass H(BaseHTTPRequestHandler):\n    def do_GET(self):\n        if self.path == '/metrics':\n            self.send_response(200)\n            self.send_header('Content-Type','text/plain; version=0.0.4; charset=utf-8')\n            self.end_headers()\n            self.wfile.write(b'sample_test_metric 123\\n')\n        else:\n            self.send_response(404)\n            self.end_headers()\n\nif __name__ == '__main__':\n    HTTPServer(('0.0.0.0', 9101), H).serve_forever()\nPY\npython /tmp/server.py"
+      - name: Wait for Prometheus to scrape test-exporter
+        run: |
+          # wait up to 30s for Prometheus to observe sample_test_metric
+          for i in {1..30}; do
+            sleep 1
+            resp=$(curl -s 'http://localhost:9090/api/v1/query?query=sample_test_metric') || true
+            echo "$resp" | grep -q 'sample_test_metric' && echo 'scraped' && exit 0 || true
+          done
+          echo 'Prometheus did not scrape sample_test_metric in time' && exit 1
+      - name: Wait for Grafana
+        run: |
+          for i in {1..30}; do
+            status=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/api/health || true)
+            if [ "$status" = "200" ]; then echo grafana-up && break; fi
+            sleep 1
+          done
+      - name: Verify dashboard provisioning
+        run: |
+          set -e
+          echo "Checking Grafana dashboard UIDs"
+          curl -s -u admin:admin http://localhost:3000/api/dashboards/uid/microservices-basic | jq -e '.meta.uid=="microservices-basic"' >/dev/null
+          curl -s -u admin:admin http://localhost:3000/api/dashboards/uid/order-service | jq -e '.meta.uid=="order-service"' >/dev/null
+          curl -s -u admin:admin http://localhost:3000/api/dashboards/uid/payment-service | jq -e '.meta.uid=="payment-service"' >/dev/null
+          curl -s -u admin:admin http://localhost:3000/api/dashboards/uid/notification-service | jq -e '.meta.uid=="notification-service"' >/dev/null
+          curl -s -u admin:admin http://localhost:3000/api/dashboards/uid/restaurant-service | jq -e '.meta.uid=="restaurant-service"' >/dev/null
+      - name: Verify Prometheus rules loaded
+        run: |
+          curl -s http://localhost:9090/api/v1/rules | jq -e '.data.groups[] | select(.name=="service_alerts")' >/dev/null
+      - name: Teardown
+        if: always()
+        run: |
+          docker rm -f grafana-ci prometheus-ci || true
+          docker network rm monitoring-ci || true
+
+  deploy:
+    name: Deploy to cluster
+    runs-on: ubuntu-latest
+    needs: docker-build-push
+    env:
+      DEPLOY_ENABLED: ${{ secrets.DEPLOY_ENABLED }}
+    if: >-
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: v1.28.0
+      - name: Configure kubeconfig
+        if: env.DEPLOY_ENABLED == 'true'
+        env:
+          KUBE_CONFIG_CONTENT: ${{ secrets.KUBE_CONFIG }}
+        run: |
+          mkdir -p ~/.kube
+          tmp="$(mktemp)"
+          decode_base64() {
+            echo "$1" | base64 -d 2>/dev/null || return 1
+          }
+          is_kubeconfig() {
+            echo "$1" | grep -q "apiVersion:.*v1" && \
+            echo "$1" | grep -q "kind: Config" >/dev/null 2>&1
+          }
+          # 1) try base64 decode once
+          if decoded="$(decode_base64 "$KUBE_CONFIG_CONTENT")" && \
+             is_kubeconfig "$decoded"; then
+            echo "$decoded" > "$tmp"
+          # 2) try plain content
+          elif is_kubeconfig "$KUBE_CONFIG_CONTENT"; then
+            echo "$KUBE_CONFIG_CONTENT" > "$tmp"
+          else
+            echo "KUBE_CONFIG secret is not a valid kubeconfig."
+            exit 1
+          fi
+          mv "$tmp" ~/.kube/config
+      - name: Deploy with kustomize overlays
+        if: env.DEPLOY_ENABLED == 'true'
+        run: |
+          kubectl apply -k kubernetes
+
+  notify:
+    name: Notify (Telegram)
+    runs-on: ubuntu-latest
+    needs:
+      - lint
+      - unit-tests
+      - integration-tests
+      - security-scan
+      - docker-build-push
+      - deploy
+    if: always()
+    steps:
+      - name: Send Telegram notification
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_TOKEN }}
+          message: |
+            CI/CD Pipeline Report
+            Repository: ${{ github.repository }}
+            Commit: ${{ github.sha }}
+            Actor: ${{ github.actor }}
+
+            Lint: ${{ needs.lint.result }}
+            Unit tests: ${{ needs.unit-tests.result }}
+            Integration tests: ${{ needs.integration-tests.result }}
+            Security scan: ${{ needs.security-scan.result }}
+            Build & push: ${{ needs.docker-build-push.result }}
+            Deploy: ${{ needs.deploy.result }}

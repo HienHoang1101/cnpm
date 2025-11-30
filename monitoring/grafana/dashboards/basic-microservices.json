@@ -1,0 +1,67 @@
+{
+  "title": "Microservices - Basic Overview",
+  "uid": "microservices-basic",
+  "schemaVersion": 16,
+  "version": 1,
+  "panels": [
+    {
+      "type": "graph",
+      "title": "HTTP Requests (rate)",
+      "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+      "targets": [
+        {"expr": "sum by (job) (rate(http_request_duration_seconds_count[1m]))", "legendFormat": "{{job}}"}
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "HTTP Error Rate (5m)",
+      "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+      "targets": [
+        {"expr": "sum by (job) (rate(http_requests_total{status=~\"5..\"}[5m])) / sum by (job) (rate(http_requests_total[5m]))", "legendFormat": "{{job}}"}
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "P95 Latency (ms)",
+      "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+      "targets": [
+        {"expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, job)) * 1000", "legendFormat": "{{job}}"}
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Process CPU User Seconds Total",
+      "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+      "targets": [
+        {"expr": "process_cpu_user_seconds_total", "legendFormat": "{{instance}}"}
+      ]
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "type": "query",
+        "name": "job",
+        "label": "Job",
+        "datasource": "Prometheus",
+        "query": "label_values(job)",
+        "multi": false,
+        "includeAll": true,
+        "allValue": null
+      }
+    ]
+  },
+  "annotations": {
+    "list": [
+      {
+        "name": "Alerts",
+        "datasource": "Prometheus",
+        "iconColor": "#ff0000",
+        "enable": true,
+        "expr": "ALERTS{severity=\"critical\"}",
+        "source": "prometheus"
+      }
+    ]
+  },
+  "time": {"from": "now-1h", "to": "now"}
+}

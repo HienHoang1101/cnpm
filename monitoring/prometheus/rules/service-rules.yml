@@ -1,0 +1,63 @@
+groups:
+  - name: service_alerts
+    rules:
+      - alert: ServiceDown
+        expr: |
+          up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service down (instance not reachable)"
+          description: "{{ $labels.instance }} (job={{ $labels.job }}, service={{ $labels.service }}) has been down for more than 1 minute."
+
+      - alert: HighErrorRate
+        expr: |
+          (sum by (service) (rate(http_errors_total[5m]))
+           / (sum by (service) (rate(http_requests_total[5m])) + 1e-9)) > 0.03
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate for {{ $labels.service }}"
+          description: "Error rate for service={{ $labels.service }} is > 3% over the last 5 minutes. Investigate increased failures."
+
+      - alert: HighLatencyP95
+        expr: |
+          histogram_quantile(0.95, sum by (le, service) (rate(http_request_duration_seconds_bucket[5m]))) > 1.5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High p95 latency for {{ $labels.service }}"
+          description: "95th percentile latency for service={{ $labels.service }} > 1.5s (5m window). Check slow endpoints and downstream dependencies."
+
+      - alert: LowActiveUsersAuth
+        expr: |
+          sum by (service) (app_active_users_total) < 1
+        for: 10m
+        labels:
+          severity: info
+        annotations:
+          summary: "Auth service has very few active users"
+          description: "The gauge app_active_users_total for auth shows < 1 for 10 minutes; could indicate auth issues or low traffic."
+
+      - alert: SuddenRequestSpike
+        expr: |
+          sum by (service) (rate(http_requests_total[1m])) > 10 * (sum by (service) (rate(http_requests_total[5m])) + 1e-9)
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Sudden request spike for {{ $labels.service }}"
+          description: "Request rate increased >10x compared to recent baseline (5m). Could be traffic spike or misbehaving client."
+
+      - alert: TestAlertFiring
+        # A simple test alert to validate end-to-end alerting (fires when value is 1)
+        expr: vector(1)
+        for: 30s
+        labels:
+          severity: none
+        annotations:
+          summary: "Test alert — Prometheus is evaluating rules"
+          description: "This is a test alert used to validate the alerting pipeline. Remove or disable in production."
